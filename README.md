@@ -56,30 +56,13 @@ Con usuario `admin` y su propia contraseña (`ADMIN_PASSWORD`), Cristian entra
 en un modo especial: puede **elegir a qué tienda conectarse** (no queda fijo
 en una sola).
 
-## Catálogo — ahora para todos, no solo admin
+## Catálogo separado por tienda
 
-Cualquier trabajador (o Cristian) puede, desde la pestaña **Catálogo**:
+Cada tienda tiene su propio catálogo, independiente de las demás:
 
-- Crear productos nuevos.
-- Editar nombre, precio y unidad de cualquier producto.
-- Dar de baja productos (sin perder el historial de ventas).
-- Corregir el stock real de su tienda (para conteos físicos).
+- Un producto que creas desde el POS de Tienda 1 **solo aparece en Tienda 1** — no en Tienda 2 ni Tienda 3. Cristian sí lo ve reflejado en el sistema central de inmediato (tanto en Productos como en Actividad).
+- El botón **"Editar"** en cada producto (antes "Corregir stock") ahora abre un panel completo: nombre, unidad, precio, stock y mínimo — todo junto, y un botón para **"Quitar de esta tienda"** sin afectar a las demás.
+- Cualquier trabajador (no solo el admin) puede crear productos, editarlos y quitarlos — cada acción queda registrada en la Actividad del sistema central, con el nombre exacto de la tienda que la hizo.
 
-Todo esto escribe en la MISMA base de datos que usa el sistema central, así
-que se ve reflejado ahí al instante — **y cada cambio queda registrado en la
-página "Actividad" del sistema central**, con el nombre de la tienda que lo
-hizo, para que Cristian tenga trazabilidad completa aunque no haya sido él
-quien lo cambió.
-
-## Punto de venta — funciones de venta real
-
-- **Venta libre**: cualquier trabajador puede cobrar algo que no está en el
-  catálogo (botón "+ Venta libre" en el ticket) — se registra con su propio
-  nombre, unidad y precio, sin necesidad de darlo de alta primero.
-- **Precio ajustable**: se puede cambiar el precio de un producto justo al
-  momento de agregarlo al ticket — ese ajuste queda registrado en el
-  reporte de ventas, no cambia el precio general del catálogo.
-
-⚠️ Antes de usar estas funciones, asegúrate de haber corrido `npm run db:init`
-en el proyecto del sistema central (palafox-inventario) con la versión más
-reciente — ahí es donde se crean las tablas/columnas nuevas que usa el punto de venta.
+⚠️ Antes de usar estas funciones, corre `npm run db:init` en el proyecto del
+sistema central (palafox-inventario) con la versión más reciente.

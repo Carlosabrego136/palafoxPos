@@ -1,10 +1,9 @@
 import { query, logEvento } from '../../lib/db';
 import { requireSession } from '../../lib/auth';
 
-// Gestión de catálogo desde el punto de venta — disponible para CUALQUIER
-// sesión válida (trabajador o admin), no solo administrador. Cada cambio
-// queda registrado en la bitácora con el origen exacto (qué tienda, o
-// Cristian), para que el sistema central lo muestre en tiempo real.
+// Gestión de catálogo desde el punto de venta. Al crear un producto aquí,
+// se asigna SOLO a la tienda desde la que se creó (o la que el admin tenga
+// seleccionada) — nunca aparece automáticamente en las otras tiendas.
 export default async function handler(req, res) {
   const session = requireSession(req, res);
   if (!session) return;
@@ -22,22 +21,33 @@ export default async function handler(req, res) {
 
   if (req.method === 'POST') {
     try {
-      const { skuCodigo, nombre, unidadMedida, precioVenta, disponibleReducido } = req.body;
-      if (!nombre || !unidadMedida || precioVenta === undefined || precioVenta === '') {
+      const { skuCodigo, nombre, unidadMedida, precioVenta, sedeId, stockInicial, stockMinimo } = req.body;
+      const sedeDestino = session.role === 'admin' ? sedeId : session.sedeId;
+      if (!nombre || !unidadMedida || precioVenta === undefined || precioVenta === '' || !sedeDestino) {
         return res.status(400).json({ error: 'Faltan datos del producto' });
       }
       const { rows } = await query(
-        `INSERT INTO productos (sku_codigo, nombre, unidad_medida, precio_venta, disponible_reducido)
-         VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-        [skuCodigo || null, nombre, unidadMedida, precioVenta, disponibleReducido !== false]
+        `INSERT INTO productos (sku_codigo, nombre, unidad_medida, precio_venta)
+         VALUES ($1,$2,$3,$4) RETURNING *`,
+        [skuCodigo || null, nombre, unidadMedida, precioVenta]
       );
+      const producto = rows[0];
+
+      await query(
+        `INSERT INTO inventario_sedes (sede_id, producto_id, stock_actual, stock_minimo, activo)
+         VALUES ($1, $2, $3, $4, true)`,
+        [sedeDestino, producto.id, stockInicial || 0, stockMinimo || 0]
+      );
+
+      const sedeRes = await query('SELECT nombre FROM sedes WHERE id=$1', [sedeDestino]);
       await logEvento({
-        sedeId: session.role === 'tienda' ? session.sedeId : null,
+        sedeId: sedeDestino,
         origen,
         tipo: 'producto_creado',
-        descripcion: `Creó el producto "${nombre}" — $${precioVenta}/${unidadMedida}`,
+        descripcion: `Creó "${nombre}" — $${precioVenta}/${unidadMedida} — solo en ${sedeRes.rows[0]?.nombre}`,
       });
-      return res.status(201).json(rows[0]);
+
+      return res.status(201).json(producto);
     } catch (err) {
       console.error(err);
       if (err.code === '23505') return res.status(400).json({ error: 'Ese SKU ya existe' });
@@ -47,7 +57,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'PATCH') {
     try {
-      const { id, skuCodigo, nombre, unidadMedida, precioVenta, disponibleReducido, activo } = req.body;
+      const { id, skuCodigo, nombre, unidadMedida, precioVenta, activo } = req.body;
       if (!id) return res.status(400).json({ error: 'Falta el id del producto' });
       const { rows } = await query(
         `UPDATE productos SET
@@ -55,8 +65,7 @@ export default async function handler(req, res) {
            nombre = COALESCE($3, nombre),
            unidad_medida = COALESCE($4, unidad_medida),
            precio_venta = COALESCE($5, precio_venta),
-           disponible_reducido = COALESCE($6, disponible_reducido),
-           activo = COALESCE($7, activo)
+           activo = COALESCE($6, activo)
          WHERE id = $1 RETURNING *`,
         [
           id,
@@ -64,7 +73,6 @@ export default async function handler(req, res) {
           nombre ?? null,
           unidadMedida ?? null,
           precioVenta ?? null,
-          disponibleReducido === undefined ? null : disponibleReducido,
           activo === undefined ? null : activo,
         ]
       );
@@ -74,7 +82,6 @@ export default async function handler(req, res) {
       if (unidadMedida) cambios.push(`unidad → ${unidadMedida}`);
       if (nombre) cambios.push(`nombre → "${nombre}"`);
       await logEvento({
-        sedeId: session.role === 'tienda' ? session.sedeId : null,
         origen,
         tipo: 'producto_editado',
         descripcion: `Editó "${rows[0].nombre}"${cambios.length ? ': ' + cambios.join(', ') : ''}`,
@@ -83,25 +90,6 @@ export default async function handler(req, res) {
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: 'Error al actualizar el producto' });
-    }
-  }
-
-  if (req.method === 'DELETE') {
-    try {
-      const { id } = req.query;
-      if (!id) return res.status(400).json({ error: 'Falta el id del producto' });
-      const prodRes = await query('SELECT nombre FROM productos WHERE id=$1', [id]);
-      await query('UPDATE productos SET activo = false WHERE id = $1', [id]);
-      await logEvento({
-        sedeId: session.role === 'tienda' ? session.sedeId : null,
-        origen,
-        tipo: 'producto_baja',
-        descripcion: `Dio de baja "${prodRes.rows[0]?.nombre || 'producto'}"`,
-      });
-      return res.status(200).json({ ok: true });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Error al eliminar el producto' });
     }
   }
 

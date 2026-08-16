@@ -14,7 +14,7 @@ export default function POS({ session }) {
   const router = useRouter();
   const esAdmin = session.role === 'admin';
 
-  const [tab, setTab] = useState('vender'); // 'vender' | 'catalogo' (solo admin)
+  const [tab, setTab] = useState('vender');
   const [sedes, setSedes] = useState([]);
   const [sedeId, setSedeId] = useState(esAdmin ? null : session.sedeId);
   const [sedeNombre, setSedeNombre] = useState(esAdmin ? '' : session.nombre);
@@ -27,9 +27,12 @@ export default function POS({ session }) {
   const [libre, setLibre] = useState({ nombre: '', unidad: 'pza', precio: '', cantidad: '' });
   const [toast, setToast] = useState(null);
 
-  // Catálogo (solo admin)
-  const [productos, setProductos] = useState([]);
-  const [nuevo, setNuevo] = useState({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', disponibleReducido: true });
+  // Edición completa de un producto de ESTA tienda (nombre/precio/unidad/stock/mínimo)
+  const [editProd, setEditProd] = useState(null);
+  const [editVals, setEditVals] = useState({});
+
+  // Catálogo — crear producto nuevo (queda solo en esta tienda)
+  const [nuevo, setNuevo] = useState({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', stockInicial: '', stockMinimo: '' });
 
   useEffect(() => {
     if (!esAdmin) return;
@@ -48,12 +51,6 @@ export default function POS({ session }) {
   function cargarInventario() {
     fetch(`/api/inventario?sedeId=${sedeId}`).then((r) => r.json()).then(setInv);
   }
-
-  function cargarCatalogo() {
-    fetch('/api/productos').then((r) => r.json()).then(setProductos);
-  }
-
-  useEffect(() => { if (tab === 'catalogo') cargarCatalogo(); }, [tab]);
 
   function showToast(text, err = false) {
     setToast({ text, err });
@@ -143,7 +140,7 @@ export default function POS({ session }) {
     router.push('/login');
   }
 
-  // ---- Gestión de catálogo (solo admin) ----
+  // ---- Crear producto nuevo (solo queda en ESTA tienda) ----
   async function crearProducto(e) {
     e.preventDefault();
     const res = await fetch('/api/productos', {
@@ -154,43 +151,63 @@ export default function POS({ session }) {
         nombre: nuevo.nombre,
         unidadMedida: nuevo.unidadMedida,
         precioVenta: parseFloat(nuevo.precioVenta),
-        disponibleReducido: nuevo.disponibleReducido,
+        sedeId,
+        stockInicial: parseFloat(nuevo.stockInicial) || 0,
+        stockMinimo: parseFloat(nuevo.stockMinimo) || 0,
       }),
     });
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'No se pudo crear', true); return; }
-    showToast(`"${data.nombre}" creado.`);
-    setNuevo({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', disponibleReducido: true });
-    cargarCatalogo();
+    showToast(`"${data.nombre}" creado en ${sedeNombre}.`);
+    setNuevo({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', stockInicial: '', stockMinimo: '' });
+    cargarInventario();
   }
 
-  async function actualizarProducto(id, campo, valor) {
+  // ---- Editar producto completo (nombre/precio/unidad/stock/mínimo) ----
+  function abrirEdicion(p) {
+    setEditProd(p);
+    setEditVals({
+      nombre: p.nombre,
+      unidadMedida: p.unidad_medida,
+      precioVenta: String(p.precio_venta),
+      stockActual: String(p.stock_actual),
+      stockMinimo: String(p.stock_minimo),
+    });
+  }
+
+  async function guardarEdicion() {
     await fetch('/api/productos', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, [campo]: valor }),
+      body: JSON.stringify({
+        id: editProd.producto_id,
+        nombre: editVals.nombre,
+        unidadMedida: editVals.unidadMedida,
+        precioVenta: parseFloat(editVals.precioVenta),
+      }),
     });
-    cargarCatalogo();
-    if (sedeId) cargarInventario();
-  }
-
-  async function eliminarProducto(id, nombre) {
-    if (!confirm(`¿Dar de baja "${nombre}"? Deja de venderse en las 3 tiendas, pero su historial se conserva.`)) return;
-    await fetch(`/api/productos?id=${id}`, { method: 'DELETE' });
-    cargarCatalogo();
-    if (sedeId) cargarInventario();
-  }
-
-  async function corregirStock(productoId, actual) {
-    const val = prompt('Corregir stock de esta tienda (conteo físico, etc.):', actual);
-    if (val === null) return;
-    const n = parseFloat(val);
-    if (isNaN(n) || n < 0) return;
     await fetch(`/api/inventario?sedeId=${sedeId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productoId, stockActual: n }),
+      body: JSON.stringify({
+        productoId: editProd.producto_id,
+        stockActual: parseFloat(editVals.stockActual),
+        stockMinimo: parseFloat(editVals.stockMinimo),
+      }),
     });
+    setEditProd(null);
+    cargarInventario();
+    showToast('Producto actualizado.');
+  }
+
+  async function quitarDeTienda() {
+    if (!confirm(`¿Quitar "${editProd.nombre}" de ${sedeNombre}? Sigue existiendo en las demás tiendas.`)) return;
+    await fetch(`/api/inventario?sedeId=${sedeId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productoId: editProd.producto_id, disponible: false }),
+    });
+    setEditProd(null);
     cargarInventario();
   }
 
@@ -213,75 +230,56 @@ export default function POS({ session }) {
         )}
         <div className="form-row" style={{ margin: 0, gap: 8 }}>
           <button className={`btn small ${tab === 'vender' ? '' : 'secondary'}`} onClick={() => setTab('vender')}>Vender</button>
-          <button className={`btn small ${tab === 'catalogo' ? '' : 'secondary'}`} onClick={() => setTab('catalogo')}>Catálogo</button>
+          <button className={`btn small ${tab === 'catalogo' ? '' : 'secondary'}`} onClick={() => setTab('catalogo')}>+ Producto nuevo</button>
         </div>
         <button className="btn secondary small" onClick={salir}>Cerrar sesión</button>
       </header>
 
       <main className="main" style={{ padding: '24px 28px 60px' }}>
         {tab === 'catalogo' ? (
-          <>
-            <section className="panel">
-              <h2 className="panel-title">Nuevo producto</h2>
-              <form className="form-row" onSubmit={crearProducto}>
-                <div>
-                  <label>SKU (opcional)</label>
-                  <input value={nuevo.skuCodigo} onChange={(e) => setNuevo({ ...nuevo, skuCodigo: e.target.value })} />
-                </div>
-                <div>
-                  <label>Nombre</label>
-                  <input required value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
-                </div>
-                <div>
-                  <label>Unidad</label>
-                  <select value={nuevo.unidadMedida} onChange={(e) => setNuevo({ ...nuevo, unidadMedida: e.target.value })}>
-                    {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label>Precio</label>
-                  <input required type="number" min="0" step="0.01" value={nuevo.precioVenta}
-                    onChange={(e) => setNuevo({ ...nuevo, precioVenta: e.target.value })} />
-                </div>
-                <button className="btn" type="submit">Crear</button>
-              </form>
-            </section>
-
-            <section className="panel">
-              <h2 className="panel-title">Catálogo completo</h2>
-              <table>
-                <thead>
-                  <tr><th>Nombre</th><th>Unidad</th><th className="num">Precio</th><th>Estado</th><th></th></tr>
-                </thead>
-                <tbody>
-                  {productos.map((p) => (
-                    <tr key={p.id} style={{ opacity: p.activo ? 1 : 0.5 }}>
-                      <td><input defaultValue={p.nombre} onBlur={(e) => e.target.value !== p.nombre && actualizarProducto(p.id, 'nombre', e.target.value)} /></td>
-                      <td className="mono">{p.unidad_medida}</td>
-                      <td className="num">
-                        <input className="min-input" type="number" min="0" step="0.01" defaultValue={p.precio_venta}
-                          onBlur={(e) => actualizarProducto(p.id, 'precioVenta', parseFloat(e.target.value))} />
-                      </td>
-                      <td><span className={`badge ${p.activo ? 'ok' : 'low'}`}>{p.activo ? 'ACTIVO' : 'DE BAJA'}</span></td>
-                      <td>
-                        {p.activo ? (
-                          <button className="btn small secondary" onClick={() => eliminarProducto(p.id, p.nombre)}>Dar de baja</button>
-                        ) : (
-                          <button className="btn small" onClick={() => actualizarProducto(p.id, 'activo', true)}>Reactivar</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
-          </>
+          <section className="panel">
+            <h2 className="panel-title">Nuevo producto en {sedeNombre}</h2>
+            <p className="page-sub" style={{ marginBottom: 16 }}>Este producto solo va a aparecer aquí — no en las otras tiendas.</p>
+            <form className="form-row" onSubmit={crearProducto}>
+              <div>
+                <label>SKU (opcional)</label>
+                <input value={nuevo.skuCodigo} onChange={(e) => setNuevo({ ...nuevo, skuCodigo: e.target.value })} />
+              </div>
+              <div>
+                <label>Nombre</label>
+                <input required value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
+              </div>
+              <div>
+                <label>Unidad</label>
+                <select value={nuevo.unidadMedida} onChange={(e) => setNuevo({ ...nuevo, unidadMedida: e.target.value })}>
+                  {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </div>
+              <div>
+                <label>Precio</label>
+                <input required type="number" min="0" step="0.01" value={nuevo.precioVenta}
+                  onChange={(e) => setNuevo({ ...nuevo, precioVenta: e.target.value })} />
+              </div>
+              <div>
+                <label>Stock inicial</label>
+                <input type="number" min="0" step="any" value={nuevo.stockInicial}
+                  onChange={(e) => setNuevo({ ...nuevo, stockInicial: e.target.value })} placeholder="0" />
+              </div>
+              <div>
+                <label>Mínimo</label>
+                <input type="number" min="0" step="any" value={nuevo.stockMinimo}
+                  onChange={(e) => setNuevo({ ...nuevo, stockMinimo: e.target.value })} placeholder="0" />
+              </div>
+              <button className="btn" type="submit">Crear en {sedeNombre}</button>
+            </form>
+          </section>
         ) : (
           <>
-            {inv?.sede?.catalogo_reducido && <p className="catalogo-note">◆ Catálogo reducido para esta tienda</p>}
-
             <div className="pos-layout">
               <div className="pos-grid">
+                {inv?.inventario.length === 0 && (
+                  <p className="empty-state">Esta tienda todavía no tiene productos. Usa "+ Producto nuevo" arriba.</p>
+                )}
                 {inv?.inventario.map((p) => {
                   const sinStock = Number(p.stock_actual) <= 0;
                   const bajo = Number(p.stock_minimo) > 0 && Number(p.stock_actual) <= Number(p.stock_minimo);
@@ -295,8 +293,8 @@ export default function POS({ session }) {
                         {p.stock_actual} {p.unidad_medida} disp.{bajo ? ' ⚠' : ''}
                       </div>
                       <button className="btn small secondary" style={{ marginTop: 8 }}
-                        onClick={(e) => { e.stopPropagation(); corregirStock(p.producto_id, p.stock_actual); }}>
-                        Corregir stock
+                        onClick={(e) => { e.stopPropagation(); abrirEdicion(p); }}>
+                        Editar
                       </button>
                     </div>
                   );
@@ -348,6 +346,36 @@ export default function POS({ session }) {
               <button className="btn secondary" onClick={() => setModalProd(null)}>Cancelar</button>
               <button className="btn" onClick={agregar}>Agregar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {editProd && (
+        <div className="qty-modal-bg" onClick={(e) => { if (e.target === e.currentTarget) setEditProd(null); }}>
+          <div className="qty-modal">
+            <h3>Editar en {sedeNombre}</h3>
+            <label>Nombre</label>
+            <input value={editVals.nombre} onChange={(e) => setEditVals({ ...editVals, nombre: e.target.value })} style={{ marginBottom: 12 }} />
+            <label>Unidad</label>
+            <select value={editVals.unidadMedida} onChange={(e) => setEditVals({ ...editVals, unidadMedida: e.target.value })} style={{ marginBottom: 12, width: '100%' }}>
+              {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+            <label>Precio</label>
+            <input type="number" min="0" step="0.01" value={editVals.precioVenta}
+              onChange={(e) => setEditVals({ ...editVals, precioVenta: e.target.value })} style={{ marginBottom: 12 }} />
+            <label>Stock en {sedeNombre}</label>
+            <input type="number" min="0" step="any" value={editVals.stockActual}
+              onChange={(e) => setEditVals({ ...editVals, stockActual: e.target.value })} style={{ marginBottom: 12 }} />
+            <label>Mínimo en {sedeNombre}</label>
+            <input type="number" min="0" step="any" value={editVals.stockMinimo}
+              onChange={(e) => setEditVals({ ...editVals, stockMinimo: e.target.value })} />
+            <div className="row" style={{ marginTop: 16 }}>
+              <button className="btn secondary" onClick={() => setEditProd(null)}>Cancelar</button>
+              <button className="btn" onClick={guardarEdicion}>Guardar</button>
+            </div>
+            <button className="btn secondary full" style={{ marginTop: 10 }} onClick={quitarDeTienda}>
+              Quitar de {sedeNombre}
+            </button>
           </div>
         </div>
       )}

@@ -70,12 +70,16 @@ export default async function handler(req, res) {
         });
 
         const nuevoStock = stockActual - item.cantidad;
+        const bajoAntes = stockMinimo > 0 && stockActual <= stockMinimo;
+        const bajoAhora = stockMinimo > 0 && nuevoStock <= stockMinimo;
         await client.query(
-          'UPDATE inventario_sedes SET stock_actual = $1 WHERE sede_id=$2 AND producto_id=$3',
+          `UPDATE inventario_sedes SET stock_actual = $1,
+             alerta_desde = ${bajoAhora && !bajoAntes ? 'NOW()' : bajoAhora ? 'alerta_desde' : 'NULL'}
+           WHERE sede_id=$2 AND producto_id=$3`,
           [nuevoStock, sedeId, item.productoId]
         );
 
-        if (stockMinimo > 0 && stockActual > stockMinimo && nuevoStock <= stockMinimo) {
+        if (bajoAhora && !bajoAntes) {
           alertas.push(nombreProd);
         }
       }
