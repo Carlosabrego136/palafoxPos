@@ -46,6 +46,10 @@ export default function POS({ session }) {
     if (!sedeId) return;
     cargarInventario();
     setTicket([]);
+    // Se refresca sola cada 10s — si Cristian cambia un precio o el stock
+    // desde el sistema central, aquí se ve reflejado sin recargar la página.
+    const t = setInterval(cargarInventario, 10000);
+    return () => clearInterval(t);
   }, [sedeId]);
 
   function cargarInventario() {
@@ -240,6 +244,11 @@ export default function POS({ session }) {
           <section className="panel">
             <h2 className="panel-title">Nuevo producto en {sedeNombre}</h2>
             <p className="page-sub" style={{ marginBottom: 16 }}>Este producto solo va a aparecer aquí — no en las otras tiendas.</p>
+            <div className="help-box">
+              <strong>SKU</strong>: código interno opcional, solo para identificarlo rápido.<br/>
+              <strong>Stock inicial</strong>: cuántas unidades tienes ahora mismo — sin esto el producto nace en 0 y no se puede vender hasta que le pongas cantidad.<br/>
+              <strong>Mínimo</strong>: cuando el stock llegue a este número o menos, aparece en Alertas para Cristian. Déjalo en 0 si no quieres alerta.
+            </div>
             <form className="form-row" onSubmit={crearProducto}>
               <div>
                 <label>SKU (opcional)</label>

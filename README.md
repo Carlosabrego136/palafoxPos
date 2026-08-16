@@ -64,5 +64,8 @@ Cada tienda tiene su propio catálogo, independiente de las demás:
 - El botón **"Editar"** en cada producto (antes "Corregir stock") ahora abre un panel completo: nombre, unidad, precio, stock y mínimo — todo junto, y un botón para **"Quitar de esta tienda"** sin afectar a las demás.
 - Cualquier trabajador (no solo el admin) puede crear productos, editarlos y quitarlos — cada acción queda registrada en la Actividad del sistema central, con el nombre exacto de la tienda que la hizo.
 
-⚠️ Antes de usar estas funciones, corre `npm run db:init` en el proyecto del
-sistema central (palafox-inventario) con la versión más reciente.
+## Sincronización en tiempo real
+
+El punto de venta se refresca solo cada 10 segundos — si Cristian cambia un
+precio o corrige el stock desde el sistema central, se ve reflejado aquí sin
+que el trabajador tenga que recargar la página.
