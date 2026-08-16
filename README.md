@@ -50,6 +50,31 @@ en Vercel, y agregar las 5 variables de entorno (`DATABASE_URL`,
 `SESSION_SECRET`, `TIENDA1_PASSWORD`, `TIENDA2_PASSWORD`,
 `TIENDA3_PASSWORD`) en Settings → Environment Variables.
 
-Vas a terminar con dos links:
-- `algo.vercel.app` → el sistema de Cristian
-- `otra-cosa.vercel.app` → el punto de venta, el que le compartes a cada tienda
+## Modo administrador (Cristian, desde cualquier tienda o desde su casa)
+
+Con usuario `admin` y su propia contraseña (`ADMIN_PASSWORD`), Cristian entra
+en un modo especial: puede **elegir a qué tienda conectarse** (no queda fijo
+en una sola), y aparece una pestaña extra de **Catálogo** donde puede:
+
+- Crear productos nuevos.
+- Editar nombre, precio y unidad de cualquier producto.
+- Dar de baja productos (sin perder el historial de ventas).
+- Corregir el stock real de cualquier producto en la tienda que tenga
+  seleccionada (para conteos físicos).
+
+Todo esto escribe en la MISMA base de datos que usa el sistema central, así
+que se ve reflejado ahí al instante, sin importar desde cuál de los dos
+proyectos lo haya hecho.
+
+## Punto de venta — funciones de venta real
+
+- **Venta libre**: cualquier trabajador puede cobrar algo que no está en el
+  catálogo (botón "+ Venta libre" en el ticket) — se registra con su propio
+  nombre, unidad y precio, sin necesidad de darlo de alta primero.
+- **Precio ajustable**: el modo administrador puede cambiar el precio de un
+  producto justo al momento de agregarlo al ticket — ese ajuste queda
+  registrado en el reporte de ventas, no cambia el precio general del catálogo.
+
+⚠️ Antes de usar estas funciones, asegúrate de haber corrido `npm run db:init`
+en el proyecto del sistema central (palafox-inventario) con la versión más
+reciente — ahí es donde se crean las columnas nuevas que usa el punto de venta.

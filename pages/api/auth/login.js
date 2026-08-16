@@ -11,12 +11,23 @@ const TIENDAS = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
   const { usuario, password } = req.body || {};
-  const cuenta = TIENDAS[String(usuario || '').toLowerCase().trim()];
+  const user = String(usuario || '').toLowerCase().trim();
 
+  // Acceso de administrador: Cristian puede entrar parado en cualquier
+  // tienda, con su propia contraseña, y elige a cuál conectarse.
+  if (user === 'admin') {
+    if (!process.env.ADMIN_PASSWORD || password !== process.env.ADMIN_PASSWORD) {
+      return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
+    }
+    res.setHeader('Set-Cookie', createSessionCookie({ role: 'admin' }));
+    return res.status(200).json({ role: 'admin' });
+  }
+
+  const cuenta = TIENDAS[user];
   if (!cuenta || !cuenta.password || password !== cuenta.password) {
     return res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
   }
 
-  res.setHeader('Set-Cookie', createSessionCookie({ sedeId: cuenta.sedeId, nombre: cuenta.nombre }));
-  res.status(200).json({ sedeId: cuenta.sedeId, nombre: cuenta.nombre });
+  res.setHeader('Set-Cookie', createSessionCookie({ role: 'tienda', sedeId: cuenta.sedeId, nombre: cuenta.nombre }));
+  res.status(200).json({ role: 'tienda', sedeId: cuenta.sedeId, nombre: cuenta.nombre });
 }
