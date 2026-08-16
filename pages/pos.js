@@ -207,19 +207,19 @@ export default function POS({ session }) {
             }}>
               {sedes.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
             </select>
-            <div className="form-row" style={{ margin: 0, gap: 8 }}>
-              <button className={`btn small ${tab === 'vender' ? '' : 'secondary'}`} onClick={() => setTab('vender')}>Vender</button>
-              <button className={`btn small ${tab === 'catalogo' ? '' : 'secondary'}`} onClick={() => setTab('catalogo')}>Catálogo</button>
-            </div>
           </>
         ) : (
           <div className="pos-tienda-nombre">{sedeNombre}</div>
         )}
+        <div className="form-row" style={{ margin: 0, gap: 8 }}>
+          <button className={`btn small ${tab === 'vender' ? '' : 'secondary'}`} onClick={() => setTab('vender')}>Vender</button>
+          <button className={`btn small ${tab === 'catalogo' ? '' : 'secondary'}`} onClick={() => setTab('catalogo')}>Catálogo</button>
+        </div>
         <button className="btn secondary small" onClick={salir}>Cerrar sesión</button>
       </header>
 
       <main className="main" style={{ padding: '24px 28px 60px' }}>
-        {tab === 'catalogo' && esAdmin ? (
+        {tab === 'catalogo' ? (
           <>
             <section className="panel">
               <h2 className="panel-title">Nuevo producto</h2>
@@ -294,12 +294,10 @@ export default function POS({ session }) {
                       <div className="st" style={{ color: bajo ? 'var(--danger)' : undefined }}>
                         {p.stock_actual} {p.unidad_medida} disp.{bajo ? ' ⚠' : ''}
                       </div>
-                      {esAdmin && (
-                        <button className="btn small secondary" style={{ marginTop: 8 }}
-                          onClick={(e) => { e.stopPropagation(); corregirStock(p.producto_id, p.stock_actual); }}>
-                          Corregir stock
-                        </button>
-                      )}
+                      <button className="btn small secondary" style={{ marginTop: 8 }}
+                        onClick={(e) => { e.stopPropagation(); corregirStock(p.producto_id, p.stock_actual); }}>
+                        Corregir stock
+                      </button>
                     </div>
                   );
                 })}
@@ -342,9 +340,9 @@ export default function POS({ session }) {
             <label>Cantidad ({modalProd.unidad_medida})</label>
             <input type="number" min="0" step="any" autoFocus value={qtyVal}
               onChange={(e) => setQtyVal(e.target.value)} style={{ marginBottom: 12 }} />
-            <label>Precio {esAdmin ? '(puedes ajustarlo)' : ''}</label>
+            <label>Precio (puedes ajustarlo)</label>
             <input type="number" min="0" step="0.01" value={precioVal}
-              onChange={(e) => setPrecioVal(e.target.value)} readOnly={!esAdmin}
+              onChange={(e) => setPrecioVal(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') agregar(); }} />
             <div className="row" style={{ marginTop: 16 }}>
               <button className="btn secondary" onClick={() => setModalProd(null)}>Cancelar</button>

@@ -1,13 +1,14 @@
-import { query } from '../../lib/db';
+import { query, logEvento } from '../../lib/db';
 import { requireSession } from '../../lib/auth';
 
-// Gestión de catálogo desde el punto de venta — solo modo administrador
-// (cuando Cristian entra con usuario "admin"). Escribe en la MISMA tabla
-// que usa el sistema central, así que se ve reflejado ahí al instante.
+// Gestión de catálogo desde el punto de venta — disponible para CUALQUIER
+// sesión válida (trabajador o admin), no solo administrador. Cada cambio
+// queda registrado en la bitácora con el origen exacto (qué tienda, o
+// Cristian), para que el sistema central lo muestre en tiempo real.
 export default async function handler(req, res) {
   const session = requireSession(req, res);
   if (!session) return;
-  if (session.role !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+  const origen = session.role === 'admin' ? 'Cristian (admin)' : session.nombre;
 
   if (req.method === 'GET') {
     try {
@@ -30,6 +31,12 @@ export default async function handler(req, res) {
          VALUES ($1,$2,$3,$4,$5) RETURNING *`,
         [skuCodigo || null, nombre, unidadMedida, precioVenta, disponibleReducido !== false]
       );
+      await logEvento({
+        sedeId: session.role === 'tienda' ? session.sedeId : null,
+        origen,
+        tipo: 'producto_creado',
+        descripcion: `Creó el producto "${nombre}" — $${precioVenta}/${unidadMedida}`,
+      });
       return res.status(201).json(rows[0]);
     } catch (err) {
       console.error(err);
@@ -62,6 +69,16 @@ export default async function handler(req, res) {
         ]
       );
       if (rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado' });
+      const cambios = [];
+      if (precioVenta !== undefined && precioVenta !== null) cambios.push(`precio → $${precioVenta}`);
+      if (unidadMedida) cambios.push(`unidad → ${unidadMedida}`);
+      if (nombre) cambios.push(`nombre → "${nombre}"`);
+      await logEvento({
+        sedeId: session.role === 'tienda' ? session.sedeId : null,
+        origen,
+        tipo: 'producto_editado',
+        descripcion: `Editó "${rows[0].nombre}"${cambios.length ? ': ' + cambios.join(', ') : ''}`,
+      });
       return res.status(200).json(rows[0]);
     } catch (err) {
       console.error(err);
@@ -73,7 +90,14 @@ export default async function handler(req, res) {
     try {
       const { id } = req.query;
       if (!id) return res.status(400).json({ error: 'Falta el id del producto' });
+      const prodRes = await query('SELECT nombre FROM productos WHERE id=$1', [id]);
       await query('UPDATE productos SET activo = false WHERE id = $1', [id]);
+      await logEvento({
+        sedeId: session.role === 'tienda' ? session.sedeId : null,
+        origen,
+        tipo: 'producto_baja',
+        descripcion: `Dio de baja "${prodRes.rows[0]?.nombre || 'producto'}"`,
+      });
       return res.status(200).json({ ok: true });
     } catch (err) {
       console.error(err);

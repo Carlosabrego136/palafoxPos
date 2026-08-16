@@ -227,6 +227,14 @@ button.btn.full{ width:100%; }
   padding:36px 34px; width:340px; box-shadow:0 10px 40px rgba(0,0,0,0.5);
 }
 .login-card input{ width:100%; font-size:16px; padding:13px 14px; }
+
+.pw-field{ position:relative; }
+.pw-field input{ padding-right:44px; }
+.pw-eye{
+  position:absolute; right:6px; top:50%; transform:translateY(-50%);
+  background:none; border:none; cursor:pointer; font-size:18px; padding:6px;
+  line-height:1;
+}
 @media (max-width: 880px){
   .sidebar{ display:none; }
   .main{ padding:22px 18px 90px; }

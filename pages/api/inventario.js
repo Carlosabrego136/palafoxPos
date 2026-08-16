@@ -1,12 +1,12 @@
-import { query } from '../../lib/db';
+import { query, logEvento } from '../../lib/db';
 import { requireSession } from '../../lib/auth';
 
 export default async function handler(req, res) {
   const session = requireSession(req, res);
   if (!session) return;
 
-  // Un trabajador siempre ve SU tienda, sin importar qué mande el navegador.
-  // El admin puede pedir cualquier sede por query (?sedeId=).
+  // Un trabajador siempre ve/toca SU tienda, sin importar qué mande el
+  // navegador. El admin puede pedir cualquier sede por query (?sedeId=).
   const sedeId = session.role === 'admin' ? req.query.sedeId : session.sedeId;
   if (!sedeId) return res.status(400).json({ error: 'Falta sedeId' });
 
@@ -34,7 +34,8 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    if (session.role !== 'admin') return res.status(403).json({ error: 'No autorizado' });
+    // Cualquier sesión válida puede corregir stock — el trabajador solo
+    // en su propia tienda (ya forzado arriba), el admin en la que elija.
     try {
       const { productoId, stockMinimo, stockActual } = req.body;
       if (productoId === undefined) return res.status(400).json({ error: 'Faltan datos' });
@@ -46,6 +47,21 @@ export default async function handler(req, res) {
            stock_actual = COALESCE($4, inventario_sedes.stock_actual)`,
         [sedeId, productoId, stockMinimo === undefined ? null : stockMinimo, stockActual === undefined ? null : stockActual]
       );
+
+      const [prodRes, sedeRes] = await Promise.all([
+        query('SELECT nombre FROM productos WHERE id=$1', [productoId]),
+        query('SELECT nombre FROM sedes WHERE id=$1', [sedeId]),
+      ]);
+      const origen = session.role === 'admin' ? 'Cristian (admin)' : session.nombre;
+      await logEvento({
+        sedeId,
+        origen,
+        tipo: stockActual !== undefined ? 'stock_corregido' : 'minimo_editado',
+        descripcion: stockActual !== undefined
+          ? `Corrigió el stock de "${prodRes.rows[0]?.nombre}" en ${sedeRes.rows[0]?.nombre} → ${stockActual}`
+          : `Cambió el mínimo de "${prodRes.rows[0]?.nombre}" en ${sedeRes.rows[0]?.nombre} → ${stockMinimo}`,
+      });
+
       return res.status(200).json({ ok: true });
     } catch (err) {
       console.error(err);

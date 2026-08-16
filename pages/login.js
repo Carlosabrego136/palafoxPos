@@ -5,6 +5,7 @@ export default function Login() {
   const router = useRouter();
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
+  const [mostrar, setMostrar] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -41,13 +42,17 @@ export default function Login() {
           style={{ marginBottom: 14, width: '100%' }}
         />
         <label>Contraseña</label>
-        <input
-          type="password"
-          placeholder="Contraseña"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ width: '100%' }}
-        />
+        <div className="pw-field">
+          <input
+            type={mostrar ? 'text' : 'password'}
+            placeholder="Contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <button type="button" className="pw-eye" onClick={() => setMostrar(!mostrar)} tabIndex={-1}>
+            {mostrar ? '🙈' : '👁'}
+          </button>
+        </div>
         {error && <p className="inline-msg err">{error}</p>}
         <button className="btn full" type="submit" disabled={loading} style={{ marginTop: 16 }}>
           {loading ? 'Entrando…' : 'Entrar'}
