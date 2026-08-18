@@ -69,3 +69,16 @@ Cada tienda tiene su propio catálogo, independiente de las demás:
 El punto de venta se refresca solo cada 10 segundos — si Cristian cambia un
 precio o corrige el stock desde el sistema central, se ve reflejado aquí sin
 que el trabajador tenga que recargar la página.
+
+## Venta completa (Fase 2)
+
+- **Venta por importe**: en el modal de agregar producto, botón "Por importe
+  ($)" — el cajero teclea cuánto va a pagar el cliente y el sistema calcula
+  la cantidad exacta, sin que nadie tenga que sacar la calculadora.
+- **Precio mayoreo**: si el producto tiene precio de mayoreo configurado (se
+  hace desde Productos, en el sistema central) y la cantidad lo alcanza,
+  aparece un botón para aplicarlo — nunca se aplica solo, el cajero decide.
+- **Poner en espera / Retomar**: botón junto a "Venta libre" para pausar un
+  ticket a medias (por ejemplo, si llega otro cliente urgente) y un botón
+  "En espera (N)" arriba para retomarlo después, incluso si se cerró la
+  pestaña.

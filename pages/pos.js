@@ -23,9 +23,13 @@ export default function POS({ session }) {
   const [modalProd, setModalProd] = useState(null);
   const [qtyVal, setQtyVal] = useState('');
   const [precioVal, setPrecioVal] = useState('');
+  const [modoCantidad, setModoCantidad] = useState('cantidad'); // 'cantidad' | 'importe'
+  const [importeVal, setImporteVal] = useState('');
   const [libreOpen, setLibreOpen] = useState(false);
   const [libre, setLibre] = useState({ nombre: '', unidad: 'pza', precio: '', cantidad: '' });
   const [toast, setToast] = useState(null);
+  const [espera, setEspera] = useState([]);
+  const [esperaOpen, setEsperaOpen] = useState(false);
 
   // Edición completa de un producto de ESTA tienda (nombre/precio/unidad/stock/mínimo)
   const [editProd, setEditProd] = useState(null);
@@ -45,6 +49,7 @@ export default function POS({ session }) {
   useEffect(() => {
     if (!sedeId) return;
     cargarInventario();
+    cargarEspera();
     setTicket([]);
     // Se refresca sola cada 10s — si Cristian cambia un precio o el stock
     // desde el sistema central, aquí se ve reflejado sin recargar la página.
@@ -56,6 +61,10 @@ export default function POS({ session }) {
     fetch(`/api/inventario?sedeId=${sedeId}`).then((r) => r.json()).then(setInv);
   }
 
+  function cargarEspera() {
+    fetch(`/api/espera?sedeId=${sedeId}`).then((r) => r.json()).then(setEspera);
+  }
+
   function showToast(text, err = false) {
     setToast({ text, err });
     setTimeout(() => setToast(null), 2800);
@@ -64,11 +73,22 @@ export default function POS({ session }) {
   function abrirModal(p) {
     setModalProd(p);
     setQtyVal('');
+    setImporteVal('');
+    setModoCantidad('cantidad');
     setPrecioVal(String(p.precio_venta));
   }
 
+  // Cantidad efectiva: si está en modo "importe", se calcula desde el $ escrito.
+  const cantidadEfectiva = modoCantidad === 'importe'
+    ? (parseFloat(importeVal) > 0 && parseFloat(precioVal) > 0 ? parseFloat(importeVal) / parseFloat(precioVal) : 0)
+    : parseFloat(qtyVal) || 0;
+
+  const sugerirMayoreo = modalProd && modalProd.cantidad_mayoreo && modalProd.precio_mayoreo &&
+    cantidadEfectiva >= Number(modalProd.cantidad_mayoreo) &&
+    Number(precioVal) !== Number(modalProd.precio_mayoreo);
+
   function agregar() {
-    const cant = parseFloat(qtyVal);
+    const cant = modoCantidad === 'importe' ? cantidadEfectiva : parseFloat(qtyVal);
     const precio = parseFloat(precioVal);
     if (!cant || cant <= 0) { showToast('Cantidad inválida', true); return; }
     if (!precio || precio <= 0) { showToast('Precio inválido', true); return; }
@@ -142,6 +162,33 @@ export default function POS({ session }) {
   async function salir() {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
+  }
+
+  async function ponerEnEspera() {
+    if (ticket.length === 0) return;
+    const nota = prompt('Nota para identificar esta venta (opcional, ej. nombre del cliente):', '') || '';
+    const res = await fetch(`/api/espera?sedeId=${sedeId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket, nota }),
+    });
+    if (!res.ok) { showToast('No se pudo poner en espera', true); return; }
+    setTicket([]);
+    cargarEspera();
+    showToast('Venta puesta en espera.');
+  }
+
+  function recuperarEspera(item) {
+    if (ticket.length > 0 && !confirm('Ya tienes un ticket abierto — se va a reemplazar por este. ¿Continuar?')) return;
+    setTicket(item.ticket);
+    setEsperaOpen(false);
+    fetch(`/api/espera?sedeId=${sedeId}&id=${item.id}`, { method: 'DELETE' }).then(cargarEspera);
+  }
+
+  async function borrarEspera(id) {
+    if (!confirm('¿Borrar esta venta en espera? No se puede deshacer.')) return;
+    await fetch(`/api/espera?sedeId=${sedeId}&id=${id}`, { method: 'DELETE' });
+    cargarEspera();
   }
 
   // ---- Crear producto nuevo (solo queda en ESTA tienda) ----
@@ -235,6 +282,11 @@ export default function POS({ session }) {
         <div className="form-row" style={{ margin: 0, gap: 8 }}>
           <button className={`btn small ${tab === 'vender' ? '' : 'secondary'}`} onClick={() => setTab('vender')}>Vender</button>
           <button className={`btn small ${tab === 'catalogo' ? '' : 'secondary'}`} onClick={() => setTab('catalogo')}>+ Producto nuevo</button>
+          {espera.length > 0 && (
+            <button className="btn small secondary" onClick={() => setEsperaOpen(true)}>
+              En espera ({espera.length})
+            </button>
+          )}
         </div>
         <button className="btn secondary small" onClick={salir}>Cerrar sesión</button>
       </header>
@@ -298,6 +350,11 @@ export default function POS({ session }) {
                       <div className="sku">{p.sku_codigo}</div>
                       <div className="nm">{p.nombre}</div>
                       <div className="pr">${Number(p.precio_venta).toFixed(2)} / {p.unidad_medida}</div>
+                      {p.precio_mayoreo && (
+                        <div className="pr" style={{ color: 'var(--amber)', fontSize: 11.5 }}>
+                          Mayoreo: ${Number(p.precio_mayoreo).toFixed(2)} desde {p.cantidad_mayoreo} {p.unidad_medida}
+                        </div>
+                      )}
                       <div className="st" style={{ color: bajo ? 'var(--danger)' : undefined }}>
                         {p.stock_actual} {p.unidad_medida} disp.{bajo ? ' ⚠' : ''}
                       </div>
@@ -331,6 +388,9 @@ export default function POS({ session }) {
                 <button className="btn secondary full" style={{ marginTop: 12 }} onClick={() => setLibreOpen(true)}>
                   + Venta libre
                 </button>
+                <button className="btn secondary full" style={{ marginTop: 8 }} disabled={ticket.length === 0} onClick={ponerEnEspera}>
+                  Poner en espera
+                </button>
                 <div className="ticket-total"><span>Total</span><span>${total.toFixed(2)}</span></div>
                 <button className="btn full" disabled={ticket.length === 0} onClick={cobrar}>Cobrar</button>
               </div>
@@ -344,13 +404,43 @@ export default function POS({ session }) {
           <div className="qty-modal">
             <h3>{modalProd.nombre}</h3>
             <p className="sub">{modalProd.stock_actual} {modalProd.unidad_medida} disponibles</p>
-            <label>Cantidad ({modalProd.unidad_medida})</label>
-            <input type="number" min="0" step="any" autoFocus value={qtyVal}
-              onChange={(e) => setQtyVal(e.target.value)} style={{ marginBottom: 12 }} />
+
+            <div className="row" style={{ marginBottom: 12 }}>
+              <button type="button" className={`btn small ${modoCantidad === 'cantidad' ? '' : 'secondary'}`}
+                onClick={() => setModoCantidad('cantidad')}>Por cantidad</button>
+              <button type="button" className={`btn small ${modoCantidad === 'importe' ? '' : 'secondary'}`}
+                onClick={() => setModoCantidad('importe')}>Por importe ($)</button>
+            </div>
+
+            {modoCantidad === 'cantidad' ? (
+              <>
+                <label>Cantidad ({modalProd.unidad_medida})</label>
+                <input type="number" min="0" step="any" autoFocus value={qtyVal}
+                  onChange={(e) => setQtyVal(e.target.value)} style={{ marginBottom: 12 }} />
+              </>
+            ) : (
+              <>
+                <label>El cliente quiere pagar ($)</label>
+                <input type="number" min="0" step="0.01" autoFocus value={importeVal}
+                  onChange={(e) => setImporteVal(e.target.value)} style={{ marginBottom: 6 }} />
+                <p className="sub" style={{ marginBottom: 12 }}>
+                  = {cantidadEfectiva > 0 ? cantidadEfectiva.toFixed(3) : '0'} {modalProd.unidad_medida}
+                </p>
+              </>
+            )}
+
             <label>Precio (puedes ajustarlo)</label>
             <input type="number" min="0" step="0.01" value={precioVal}
               onChange={(e) => setPrecioVal(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') agregar(); }} />
+
+            {sugerirMayoreo && (
+              <button type="button" className="btn small secondary full" style={{ marginTop: 10 }}
+                onClick={() => setPrecioVal(String(modalProd.precio_mayoreo))}>
+                Usar precio mayoreo (${Number(modalProd.precio_mayoreo).toFixed(2)}) — aplica desde {modalProd.cantidad_mayoreo} {modalProd.unidad_medida}
+              </button>
+            )}
+
             <div className="row" style={{ marginTop: 16 }}>
               <button className="btn secondary" onClick={() => setModalProd(null)}>Cancelar</button>
               <button className="btn" onClick={agregar}>Agregar</button>
@@ -411,6 +501,34 @@ export default function POS({ session }) {
               <button className="btn" type="submit">Agregar</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {esperaOpen && (
+        <div className="qty-modal-bg" onClick={(e) => { if (e.target === e.currentTarget) setEsperaOpen(false); }}>
+          <div className="qty-modal" style={{ width: 360 }}>
+            <h3>Ventas en espera</h3>
+            {espera.length === 0 ? (
+              <p className="sub">No hay ninguna pausada.</p>
+            ) : (
+              espera.map((item) => {
+                const totalItem = item.ticket.reduce((s, t) => s + Number(t.precio_venta) * t.cantidad, 0);
+                return (
+                  <div key={item.id} className="ticket-item" style={{ alignItems: 'center' }}>
+                    <div>
+                      <div className="n">{item.nota || `Venta #${item.id}`}</div>
+                      <div className="q">{item.ticket.length} artículo(s) · ${totalItem.toFixed(2)}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn small" onClick={() => recuperarEspera(item)}>Retomar</button>
+                      <button className="btn small secondary" onClick={() => borrarEspera(item.id)}>✕</button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            <button className="btn secondary full" style={{ marginTop: 14 }} onClick={() => setEsperaOpen(false)}>Cerrar</button>
+          </div>
         </div>
       )}
 
