@@ -433,3 +433,43 @@ button.btn.full{ width:100%; }
   .pos-cashier-info{ display:none; }
   .pos-nav-btn{ padding:6px 10px; }
 }
+
+/* ============================================================
+   Acento azul celeste — SOLO en el Punto de Venta, para dar más
+   contraste y separar visualmente "navegación/selección" (azul)
+   de "dinero/cobro" (rojo, se queda intacto). Puro diseño, cero
+   cambios de funcionamiento.
+   ============================================================ */
+:root{
+  --sky: #38bdf8;
+  --sky-soft: rgba(56,189,248,0.18);
+  --sky-deep: #052033;
+}
+
+/* Navegación superior: Vender / Producto / En espera */
+.pos-nav-btn.active{ background:var(--sky); color:var(--sky-deep); }
+.pos-nav-btn .badge-count{ background:var(--sky); color:var(--sky-deep); }
+
+/* Chips de categoría */
+.category-chip.active{ background:var(--sky); color:var(--sky-deep); border-color:transparent; }
+.category-chip:not(.active):hover{ border-color:var(--sky); color:var(--text); }
+
+/* Contador de artículos del ticket + avatar del cajero */
+.ticket-count{ background:var(--sky-soft); color:var(--sky); }
+.pos-avatar{ background:var(--sky); color:var(--sky-deep); }
+
+/* Buscador: se ilumina en azul al escribir, para que no se pierda */
+.pos-search-row input:focus{ border-color:var(--sky); box-shadow:0 0 0 3px var(--sky-soft); }
+
+/* Tarjetas de producto: borde azul al pasar el mouse/tocar */
+.pos-card-v2:hover{ border-color:var(--sky); }
+.pos-card-v2 .cat-tag{ color:var(--sky); }
+
+/* Renglón del ticket: resalta suave en azul al pasar el mouse */
+.ticket-row-v2:hover{ background:var(--sky-soft); border-radius:8px; }
+
+/* Botones secundarios (Libre, En espera, Cancelar, Editar): azul al interactuar */
+button.btn.secondary:hover{ background:var(--sky-soft); color:var(--sky); }
+
+/* Toggle "Por cantidad / Por importe" dentro del modal: el activo se ve azul */
+.qty-modal .btn.small:not(.secondary){ background:var(--sky); color:var(--sky-deep); }
