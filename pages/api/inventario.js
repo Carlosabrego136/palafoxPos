@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
       const { rows } = await query(
         `SELECT p.id AS producto_id, p.sku_codigo, p.nombre, p.unidad_medida, p.precio_venta,
-                p.precio_mayoreo, p.cantidad_mayoreo,
+                p.precio_mayoreo, p.cantidad_mayoreo, p.categoria,
                 i.stock_actual, i.stock_minimo, i.alerta_desde
          FROM inventario_sedes i
          JOIN productos p ON p.id = i.producto_id

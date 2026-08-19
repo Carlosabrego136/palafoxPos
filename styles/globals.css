@@ -310,3 +310,126 @@ button.btn.full{ width:100%; }
   .pos-topbar{ padding:14px 16px; flex-wrap:wrap; }
   .pos-tienda-nombre{ font-size:17px; order:3; width:100%; }
 }
+
+/* ============================================================
+   Rediseño profesional del Punto de Venta (solo visual)
+   ============================================================ */
+.pos-topbar-v2{
+  display:flex; align-items:center; gap:22px;
+  padding:12px 26px; border-bottom:1px solid var(--border); background:var(--surface);
+  flex-wrap:wrap;
+}
+.pos-brand-block{ display:flex; flex-direction:column; line-height:1.1; margin-right:6px; }
+.pos-brand-block .brand{ font-size:22px; }
+.pos-brand-block .pos-tienda-tag{
+  font-family:var(--font-mono); font-size:10.5px; color:var(--text-dim);
+  letter-spacing:0.6px; text-transform:uppercase; margin-top:2px;
+}
+
+.pos-nav-group{ display:flex; gap:4px; background:var(--surface-2); padding:4px; border-radius:12px; }
+.pos-nav-btn{
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  background:none; border:none; color:var(--text-muted); font-size:11px; font-weight:700;
+  cursor:pointer; padding:7px 16px; border-radius:9px; transition:all .15s;
+  font-family:var(--font-body);
+}
+.pos-nav-btn .ic{ font-size:17px; }
+.pos-nav-btn.active{ color:#fff; background:var(--accent); }
+.pos-nav-btn:not(.active):hover{ color:var(--text); }
+.pos-nav-btn .badge-count{
+  position:absolute; margin-top:-18px; margin-left:22px;
+  background:var(--amber); color:#1a1200; font-size:9.5px; font-weight:800;
+  border-radius:10px; padding:1px 5px; min-width:15px; text-align:center;
+}
+
+.pos-spacer{ flex:1; }
+
+.pos-cashier{ display:flex; align-items:center; gap:10px; }
+.pos-avatar{
+  width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff;
+  display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px;
+  flex-shrink:0;
+}
+.pos-cashier-info{ text-align:right; line-height:1.3; }
+.pos-cashier-info .nm{ font-size:13px; font-weight:700; color:var(--text); }
+.pos-cashier-info .rl{ font-size:10px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.6px; }
+
+.pos-body{ display:grid; grid-template-columns:1fr 360px; gap:0; align-items:stretch; min-height:calc(100vh - 68px); }
+.pos-main-col{ padding:22px 24px 90px; }
+.pos-search-row{ display:flex; gap:10px; margin-bottom:16px; }
+.pos-search-row input{ flex:1; font-size:15px; }
+
+.category-chip-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px; }
+.category-chip{
+  padding:7px 15px; border-radius:20px; background:var(--surface-2); border:1px solid var(--border);
+  color:var(--text-muted); font-size:12.5px; font-weight:700; cursor:pointer; transition:all .15s;
+}
+.category-chip.active{ background:var(--accent); color:#fff; border-color:transparent; }
+.category-chip:not(.active):hover{ border-color:var(--accent); color:var(--text); }
+
+.pos-grid-v2{ display:grid; grid-template-columns:repeat(auto-fill,minmax(175px,1fr)); gap:14px; }
+.pos-card-v2{
+  background:var(--surface); border:1.5px solid var(--border); border-radius:14px;
+  padding:0; cursor:pointer; transition:border-color .15s, transform .15s; overflow:hidden;
+  display:flex; flex-direction:column;
+}
+.pos-card-v2:hover{ border-color:var(--accent); transform:translateY(-2px); }
+.pos-card-v2.disabled{ opacity:0.4; cursor:not-allowed; }
+.pos-card-v2 .cat-tag{
+  font-family:var(--font-mono); font-size:9.5px; color:var(--text-dim); text-transform:uppercase;
+  letter-spacing:0.5px; padding:9px 12px 0;
+}
+.pos-card-v2 .nm{ font-size:15px; font-weight:700; padding:4px 12px 8px; line-height:1.3; flex:1; }
+.pos-card-v2 .price-block{
+  background:var(--surface-2); padding:10px 12px; border-top:1px solid var(--border);
+}
+.pos-card-v2 .pr{ font-family:var(--font-mono); font-size:16px; font-weight:700; color:var(--text); }
+.pos-card-v2 .pr .unit{ font-size:11px; color:var(--text-dim); font-weight:500; }
+.pos-card-v2 .mayoreo-tag{ font-size:10.5px; color:var(--amber); margin-top:2px; font-weight:600; }
+.pos-card-v2 .stock-row{ display:flex; justify-content:space-between; align-items:center; margin-top:6px; }
+.pos-card-v2 .stock-pill{
+  font-family:var(--font-mono); font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px;
+  background:var(--ok-soft); color:var(--ok);
+}
+.pos-card-v2 .stock-pill.low{ background:var(--danger-soft); color:var(--danger); }
+.pos-card-v2 .edit-btn{
+  background:none; border:none; color:var(--text-dim); font-size:11px; font-weight:700;
+  cursor:pointer; text-decoration:underline;
+}
+
+.ticket-col{
+  background:var(--surface); border-left:1px solid var(--border);
+  display:flex; flex-direction:column; padding:20px 20px 0; position:sticky; top:0;
+  max-height:calc(100vh - 68px); align-self:flex-start;
+}
+.ticket-col .ticket-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.ticket-col .ticket-head h2{ font-family:var(--font-display); font-size:20px; }
+.ticket-count{
+  font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--text-dim);
+  background:var(--surface-2); padding:3px 10px; border-radius:20px;
+}
+.ticket-scroll{ flex:1; overflow-y:auto; margin-bottom:12px; }
+.ticket-row-v2{
+  display:flex; justify-content:space-between; align-items:flex-start; gap:8px;
+  padding:11px 0; border-bottom:1px dashed var(--border);
+}
+.ticket-row-v2:last-child{ border-bottom:none; }
+.ticket-row-v2 .n{ font-size:14px; font-weight:600; }
+.ticket-row-v2 .q{ font-family:var(--font-mono); font-size:12px; color:var(--text-muted); margin-top:2px; }
+.ticket-row-v2 .amt{ font-family:var(--font-mono); font-size:14.5px; font-weight:700; white-space:nowrap; }
+.ticket-actions-row{ display:flex; gap:8px; margin-bottom:10px; }
+.ticket-actions-row .btn{ flex:1; }
+.ticket-footer{
+  border-top:1px solid var(--border); padding:16px 0 20px; margin-top:auto;
+  position:sticky; bottom:0; background:var(--surface);
+}
+.ticket-total-v2{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px; }
+.ticket-total-v2 .lbl{ font-size:13px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:700; }
+.ticket-total-v2 .amt{ font-family:var(--font-display); font-size:32px; font-weight:700; color:var(--accent); }
+
+@media (max-width: 880px){
+  .pos-body{ grid-template-columns:1fr; }
+  .ticket-col{ border-left:none; border-top:1px solid var(--border); position:static; max-height:none; }
+  .pos-cashier-info{ display:none; }
+  .pos-nav-btn{ padding:6px 10px; }
+}

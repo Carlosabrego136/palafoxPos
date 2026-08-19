@@ -38,6 +38,10 @@ export default function POS({ session }) {
   // Catálogo — crear producto nuevo (queda solo en esta tienda)
   const [nuevo, setNuevo] = useState({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', stockInicial: '', stockMinimo: '' });
 
+  // Solo para acomodo visual: buscador y filtro de categoría en la pantalla de venta.
+  const [busqueda, setBusqueda] = useState('');
+  const [categoriaActiva, setCategoriaActiva] = useState('todas');
+
   useEffect(() => {
     if (!esAdmin) return;
     fetch('/api/sedes').then((r) => r.json()).then((list) => {
@@ -262,37 +266,59 @@ export default function POS({ session }) {
     cargarInventario();
   }
 
+  const categorias = ['todas', ...new Set((inv?.inventario || []).map((p) => p.categoria).filter(Boolean))];
+  const inventarioFiltrado = (inv?.inventario || []).filter((p) => {
+    const coincideTexto = !busqueda || p.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (p.sku_codigo || '').toLowerCase().includes(busqueda.toLowerCase());
+    const coincideCategoria = categoriaActiva === 'todas' || p.categoria === categoriaActiva;
+    return coincideTexto && coincideCategoria;
+  });
+
+  const inicialCajero = esAdmin ? 'A' : (sedeNombre || '?').trim().charAt(0).toUpperCase();
+
   return (
     <div className="pos-page">
-      <header className="pos-topbar">
-        <div className="brand">PALA<span>FOX</span></div>
-        {esAdmin ? (
-          <>
-            <span className="pos-mode-badge">Admin</span>
-            <select value={sedeId || ''} onChange={(e) => {
-              const s = sedes.find((x) => x.id === Number(e.target.value));
-              setSedeId(s.id); setSedeNombre(s.nombre);
-            }}>
-              {sedes.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-            </select>
-          </>
-        ) : (
-          <div className="pos-tienda-nombre">{sedeNombre}</div>
-        )}
-        <div className="form-row" style={{ margin: 0, gap: 8 }}>
-          <button className={`btn small ${tab === 'vender' ? '' : 'secondary'}`} onClick={() => setTab('vender')}>Vender</button>
-          <button className={`btn small ${tab === 'catalogo' ? '' : 'secondary'}`} onClick={() => setTab('catalogo')}>+ Producto nuevo</button>
-          {espera.length > 0 && (
-            <button className="btn small secondary" onClick={() => setEsperaOpen(true)}>
-              En espera ({espera.length})
-            </button>
-          )}
+      <header className="pos-topbar-v2">
+        <div className="pos-brand-block">
+          <div className="brand">PALA<span>FOX</span></div>
+          <div className="pos-tienda-tag">{sedeNombre || '—'}</div>
         </div>
-        <button className="btn secondary small" onClick={salir}>Cerrar sesión</button>
+
+        {esAdmin && (
+          <select value={sedeId || ''} onChange={(e) => {
+            const s = sedes.find((x) => x.id === Number(e.target.value));
+            setSedeId(s.id); setSedeNombre(s.nombre);
+          }}>
+            {sedes.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+          </select>
+        )}
+
+        <div className="pos-nav-group">
+          <button className={`pos-nav-btn ${tab === 'vender' ? 'active' : ''}`} onClick={() => setTab('vender')}>
+            <span className="ic">🛒</span>Vender
+          </button>
+          <button className={`pos-nav-btn ${tab === 'catalogo' ? 'active' : ''}`} onClick={() => setTab('catalogo')}>
+            <span className="ic">＋</span>Producto
+          </button>
+          <button className="pos-nav-btn" onClick={() => setEsperaOpen(true)} style={{ position: 'relative' }}>
+            <span className="ic">⏸</span>En espera
+            {espera.length > 0 && <span className="badge-count">{espera.length}</span>}
+          </button>
+        </div>
+
+        <div className="pos-spacer" />
+
+        <div className="pos-cashier">
+          <div className="pos-cashier-info">
+            <div className="nm">{esAdmin ? 'Cristian' : sedeNombre}</div>
+            <div className="rl">{esAdmin ? 'Administrador' : 'Punto de venta'}</div>
+          </div>
+          <div className="pos-avatar">{inicialCajero}</div>
+        </div>
+        <button className="btn secondary small" onClick={salir}>Salir</button>
       </header>
 
-      <main className="main" style={{ padding: '24px 28px 60px' }}>
-        {tab === 'catalogo' ? (
+      {tab === 'catalogo' ? (
+        <main className="main" style={{ padding: '24px 28px 60px' }}>
           <section className="panel">
             <h2 className="panel-title">Nuevo producto en {sedeNombre}</h2>
             <p className="page-sub" style={{ marginBottom: 16 }}>Este producto solo va a aparecer aquí — no en las otras tiendas.</p>
@@ -334,70 +360,103 @@ export default function POS({ session }) {
               <button className="btn" type="submit">Crear en {sedeNombre}</button>
             </form>
           </section>
-        ) : (
-          <>
-            <div className="pos-layout">
-              <div className="pos-grid">
-                {inv?.inventario.length === 0 && (
-                  <p className="empty-state">Esta tienda todavía no tiene productos. Usa "+ Producto nuevo" arriba.</p>
-                )}
-                {inv?.inventario.map((p) => {
-                  const sinStock = Number(p.stock_actual) <= 0;
-                  const bajo = Number(p.stock_minimo) > 0 && Number(p.stock_actual) <= Number(p.stock_minimo);
-                  return (
-                    <div key={p.producto_id} className={`pos-card ${sinStock ? 'disabled' : ''}`}
-                      onClick={() => !sinStock && abrirModal(p)}>
-                      <div className="sku">{p.sku_codigo}</div>
-                      <div className="nm">{p.nombre}</div>
-                      <div className="pr">${Number(p.precio_venta).toFixed(2)} / {p.unidad_medida}</div>
-                      {p.precio_mayoreo && (
-                        <div className="pr" style={{ color: 'var(--amber)', fontSize: 11.5 }}>
-                          Mayoreo: ${Number(p.precio_mayoreo).toFixed(2)} desde {p.cantidad_mayoreo} {p.unidad_medida}
-                        </div>
-                      )}
-                      <div className="st" style={{ color: bajo ? 'var(--danger)' : undefined }}>
-                        {p.stock_actual} {p.unidad_medida} disp.{bajo ? ' ⚠' : ''}
-                      </div>
-                      <button className="btn small secondary" style={{ marginTop: 8 }}
-                        onClick={(e) => { e.stopPropagation(); abrirEdicion(p); }}>
-                        Editar
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="ticket">
-                <h2 className="panel-title">Ticket</h2>
-                {ticket.length === 0 ? (
-                  <p className="empty-ticket">Toca un producto para agregarlo</p>
-                ) : (
-                  ticket.map((t, idx) => (
-                    <div className="ticket-item" key={idx}>
-                      <div>
-                        <div className="n">{t.nombre}{t.libre ? ' (libre)' : ''}</div>
-                        <div className="q">{t.cantidad} {t.unidad_medida} × ${Number(t.precio_venta).toFixed(2)}</div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="mono">${(t.cantidad * t.precio_venta).toFixed(2)}</span>
-                        <button className="btn small secondary" onClick={() => quitar(idx)}>✕</button>
-                      </div>
-                    </div>
-                  ))
-                )}
-                <button className="btn secondary full" style={{ marginTop: 12 }} onClick={() => setLibreOpen(true)}>
-                  + Venta libre
-                </button>
-                <button className="btn secondary full" style={{ marginTop: 8 }} disabled={ticket.length === 0} onClick={ponerEnEspera}>
-                  Poner en espera
-                </button>
-                <div className="ticket-total"><span>Total</span><span>${total.toFixed(2)}</span></div>
-                <button className="btn full" disabled={ticket.length === 0} onClick={cobrar}>Cobrar</button>
-              </div>
+        </main>
+      ) : (
+        <div className="pos-body">
+          <div className="pos-main-col">
+            <div className="pos-search-row">
+              <input
+                type="text"
+                placeholder="Buscar producto por nombre o SKU..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
             </div>
-          </>
-        )}
-      </main>
+
+            {categorias.length > 1 && (
+              <div className="category-chip-row">
+                {categorias.map((c) => (
+                  <span key={c} className={`category-chip ${categoriaActiva === c ? 'active' : ''}`}
+                    onClick={() => setCategoriaActiva(c)}>
+                    {c === 'todas' ? 'Todas' : c}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="pos-grid-v2">
+              {inv?.inventario.length === 0 && (
+                <p className="empty-state">Esta tienda todavía no tiene productos. Usa "Producto" arriba.</p>
+              )}
+              {inv?.inventario.length > 0 && inventarioFiltrado.length === 0 && (
+                <p className="empty-state">Nada coincide con esa búsqueda.</p>
+              )}
+              {inventarioFiltrado.map((p) => {
+                const sinStock = Number(p.stock_actual) <= 0;
+                const bajo = Number(p.stock_minimo) > 0 && Number(p.stock_actual) <= Number(p.stock_minimo);
+                return (
+                  <div key={p.producto_id} className={`pos-card-v2 ${sinStock ? 'disabled' : ''}`}
+                    onClick={() => !sinStock && abrirModal(p)}>
+                    <div className="cat-tag">{p.categoria || p.sku_codigo || '—'}</div>
+                    <div className="nm">{p.nombre}</div>
+                    <div className="price-block">
+                      <div className="pr">${Number(p.precio_venta).toFixed(2)} <span className="unit">/ {p.unidad_medida}</span></div>
+                      {p.precio_mayoreo && (
+                        <div className="mayoreo-tag">Mayoreo ${Number(p.precio_mayoreo).toFixed(2)} desde {p.cantidad_mayoreo}</div>
+                      )}
+                      <div className="stock-row">
+                        <span className={`stock-pill ${bajo ? 'low' : ''}`}>
+                          {p.stock_actual} {p.unidad_medida}
+                        </span>
+                        <button className="edit-btn" onClick={(e) => { e.stopPropagation(); abrirEdicion(p); }}>
+                          Editar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="ticket-col">
+            <div className="ticket-head">
+              <h2>Ticket</h2>
+              <span className="ticket-count">{ticket.length} art.</span>
+            </div>
+            <div className="ticket-scroll">
+              {ticket.length === 0 ? (
+                <p className="empty-ticket">Toca un producto para agregarlo</p>
+              ) : (
+                ticket.map((t, idx) => (
+                  <div className="ticket-row-v2" key={idx}>
+                    <div>
+                      <div className="n">{t.nombre}{t.libre ? ' (libre)' : ''}</div>
+                      <div className="q">{t.cantidad} {t.unidad_medida} × ${Number(t.precio_venta).toFixed(2)}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className="amt">${(t.cantidad * t.precio_venta).toFixed(2)}</span>
+                      <button className="btn small secondary" onClick={() => quitar(idx)}>✕</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="ticket-footer">
+              <div className="ticket-actions-row">
+                <button className="btn secondary" onClick={() => setLibreOpen(true)}>+ Libre</button>
+                <button className="btn secondary" disabled={ticket.length === 0} onClick={ponerEnEspera}>En espera</button>
+              </div>
+              <div className="ticket-total-v2">
+                <span className="lbl">Total</span>
+                <span className="amt">${total.toFixed(2)}</span>
+              </div>
+              <button className="btn full" disabled={ticket.length === 0} onClick={cobrar}>Cobrar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modalProd && (
         <div className="qty-modal-bg" onClick={(e) => { if (e.target === e.currentTarget) setModalProd(null); }}>
