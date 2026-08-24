@@ -36,7 +36,7 @@ export default function POS({ session }) {
   const [editVals, setEditVals] = useState({});
 
   // Catálogo — crear producto nuevo (queda solo en esta tienda)
-  const [nuevo, setNuevo] = useState({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', stockInicial: '', stockMinimo: '' });
+  const [nuevo, setNuevo] = useState({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', stockInicial: '', stockMinimo: '', precioMayoreo: '', cantidadMayoreo: '' });
 
   // Solo para acomodo visual: buscador y filtro de categoría en la pantalla de venta.
   const [busqueda, setBusqueda] = useState('');
@@ -213,12 +213,23 @@ export default function POS({ session }) {
     });
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'No se pudo crear', true); return; }
+    if (nuevo.precioMayoreo) {
+      await fetch('/api/productos', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: data.id,
+          precioMayoreo: parseFloat(nuevo.precioMayoreo),
+          cantidadMayoreo: parseFloat(nuevo.cantidadMayoreo) || 0,
+        }),
+      });
+    }
     showToast(`"${data.nombre}" creado en ${sedeNombre}.`);
-    setNuevo({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', stockInicial: '', stockMinimo: '' });
+    setNuevo({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', stockInicial: '', stockMinimo: '', precioMayoreo: '', cantidadMayoreo: '' });
     cargarInventario();
   }
 
-  // ---- Editar producto completo (nombre/precio/unidad/stock/mínimo) ----
+  // ---- Editar producto completo (nombre/precio/unidad/stock/mínimo/mayoreo) ----
   function abrirEdicion(p) {
     setEditProd(p);
     setEditVals({
@@ -227,6 +238,8 @@ export default function POS({ session }) {
       precioVenta: String(p.precio_venta),
       stockActual: String(p.stock_actual),
       stockMinimo: String(p.stock_minimo),
+      precioMayoreo: p.precio_mayoreo ? String(p.precio_mayoreo) : '',
+      cantidadMayoreo: p.cantidad_mayoreo ? String(p.cantidad_mayoreo) : '',
     });
   }
 
@@ -239,6 +252,8 @@ export default function POS({ session }) {
         nombre: editVals.nombre,
         unidadMedida: editVals.unidadMedida,
         precioVenta: parseFloat(editVals.precioVenta),
+        precioMayoreo: editVals.precioMayoreo === '' ? '' : parseFloat(editVals.precioMayoreo),
+        cantidadMayoreo: editVals.cantidadMayoreo === '' ? '' : parseFloat(editVals.cantidadMayoreo),
       }),
     });
     await fetch(`/api/inventario?sedeId=${sedeId}`, {
@@ -325,7 +340,8 @@ export default function POS({ session }) {
             <div className="help-box">
               <strong>SKU</strong>: código interno opcional, solo para identificarlo rápido.<br/>
               <strong>Stock inicial</strong>: cuántas unidades tienes ahora mismo — sin esto el producto nace en 0 y no se puede vender hasta que le pongas cantidad.<br/>
-              <strong>Mínimo</strong>: cuando el stock llegue a este número o menos, aparece en Alertas para Cristian. Déjalo en 0 si no quieres alerta.
+              <strong>Mínimo</strong>: cuando el stock llegue a este número o menos, aparece en Alertas para Cristian. Déjalo en 0 si no quieres alerta.<br/>
+              <strong>Mayoreo (opcional)</strong>: un precio especial que se sugiere solo cuando la venta alcanza la cantidad que pongas — nunca se aplica solo, tú decides si usarlo al cobrar.
             </div>
             <form className="form-row" onSubmit={crearProducto}>
               <div>
@@ -356,6 +372,16 @@ export default function POS({ session }) {
                 <label>Mínimo</label>
                 <input type="number" min="0" step="any" value={nuevo.stockMinimo}
                   onChange={(e) => setNuevo({ ...nuevo, stockMinimo: e.target.value })} placeholder="0" />
+              </div>
+              <div>
+                <label>Precio mayoreo (opcional)</label>
+                <input type="number" min="0" step="0.01" value={nuevo.precioMayoreo}
+                  onChange={(e) => setNuevo({ ...nuevo, precioMayoreo: e.target.value })} placeholder="0.00" />
+              </div>
+              <div>
+                <label>Desde cuánto ({nuevo.unidadMedida})</label>
+                <input type="number" min="0" step="any" value={nuevo.cantidadMayoreo}
+                  onChange={(e) => setNuevo({ ...nuevo, cantidadMayoreo: e.target.value })} placeholder={`ej. 5`} />
               </div>
               <button className="btn" type="submit">Crear en {sedeNombre}</button>
             </form>
@@ -526,7 +552,13 @@ export default function POS({ session }) {
               onChange={(e) => setEditVals({ ...editVals, stockActual: e.target.value })} style={{ marginBottom: 12 }} />
             <label>Mínimo en {sedeNombre}</label>
             <input type="number" min="0" step="any" value={editVals.stockMinimo}
-              onChange={(e) => setEditVals({ ...editVals, stockMinimo: e.target.value })} />
+              onChange={(e) => setEditVals({ ...editVals, stockMinimo: e.target.value })} style={{ marginBottom: 12 }} />
+            <label>Precio mayoreo (déjalo vacío para desactivarlo)</label>
+            <input type="number" min="0" step="0.01" value={editVals.precioMayoreo}
+              onChange={(e) => setEditVals({ ...editVals, precioMayoreo: e.target.value })} style={{ marginBottom: 12 }} placeholder="Sin mayoreo" />
+            <label>Desde cuánto ({editVals.unidadMedida})</label>
+            <input type="number" min="0" step="any" value={editVals.cantidadMayoreo}
+              onChange={(e) => setEditVals({ ...editVals, cantidadMayoreo: e.target.value })} placeholder="0" />
             <div className="row" style={{ marginTop: 16 }}>
               <button className="btn secondary" onClick={() => setEditProd(null)}>Cancelar</button>
               <button className="btn" onClick={guardarEdicion}>Guardar</button>

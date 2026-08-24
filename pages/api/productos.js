@@ -57,7 +57,7 @@ export default async function handler(req, res) {
 
   if (req.method === 'PATCH') {
     try {
-      const { id, skuCodigo, nombre, unidadMedida, precioVenta, activo } = req.body;
+      const { id, skuCodigo, nombre, unidadMedida, precioVenta, precioMayoreo, cantidadMayoreo, activo } = req.body;
       if (!id) return res.status(400).json({ error: 'Falta el id del producto' });
       const { rows } = await query(
         `UPDATE productos SET
@@ -65,7 +65,9 @@ export default async function handler(req, res) {
            nombre = COALESCE($3, nombre),
            unidad_medida = COALESCE($4, unidad_medida),
            precio_venta = COALESCE($5, precio_venta),
-           activo = COALESCE($6, activo)
+           precio_mayoreo = CASE WHEN $6::boolean THEN $7 ELSE precio_mayoreo END,
+           cantidad_mayoreo = CASE WHEN $6::boolean THEN $8 ELSE cantidad_mayoreo END,
+           activo = COALESCE($9, activo)
          WHERE id = $1 RETURNING *`,
         [
           id,
@@ -73,6 +75,9 @@ export default async function handler(req, res) {
           nombre ?? null,
           unidadMedida ?? null,
           precioVenta ?? null,
+          precioMayoreo !== undefined || cantidadMayoreo !== undefined,
+          precioMayoreo === undefined ? null : (precioMayoreo === '' ? null : precioMayoreo),
+          cantidadMayoreo === undefined ? null : (cantidadMayoreo === '' ? null : cantidadMayoreo),
           activo === undefined ? null : activo,
         ]
       );
@@ -81,6 +86,13 @@ export default async function handler(req, res) {
       if (precioVenta !== undefined && precioVenta !== null) cambios.push(`precio → $${precioVenta}`);
       if (unidadMedida) cambios.push(`unidad → ${unidadMedida}`);
       if (nombre) cambios.push(`nombre → "${nombre}"`);
+      if (precioMayoreo !== undefined || cantidadMayoreo !== undefined) {
+        cambios.push(
+          rows[0].precio_mayoreo
+            ? `mayoreo → $${rows[0].precio_mayoreo} desde ${rows[0].cantidad_mayoreo}`
+            : 'mayoreo desactivado'
+        );
+      }
       await logEvento({
         origen,
         tipo: 'producto_editado',
