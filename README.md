@@ -82,3 +82,23 @@ que el trabajador tenga que recargar la página.
   ticket a medias (por ejemplo, si llega otro cliente urgente) y un botón
   "En espera (N)" arriba para retomarlo después, incluso si se cerró la
   pestaña.
+
+## Caja real (Fase 4)
+
+- **Apertura obligatoria**: antes de vender, hay que abrir la caja con el
+  fondo inicial (efectivo con el que arranca el día). Sin esto, la pantalla
+  de venta no se muestra — es la única forma de que el corte de caja tenga
+  sentido después.
+- **Retirar / Depositar efectivo**: botones en la barra superior, cada
+  movimiento queda registrado con quién, cuánto y por qué.
+- **Nuevo Corte / Cerrar caja**: el cajero cuenta el efectivo físico y el
+  sistema le dice al instante si sobró, faltó, o cuadró exacto — comparando
+  contra fondo + ventas en efectivo + depósitos − retiros.
+- **Método de pago** al cobrar (Efectivo / Tarjeta / Transferencia) — solo
+  las ventas en efectivo cuentan para el corte de caja, para que el cálculo
+  sea real.
+- **Campanita de notificaciones**: stock bajo y caducidad, en vivo, en la
+  barra superior.
+- Todo lo anterior lo ve Cristian en tiempo real desde la página **Caja**
+  del sistema central — apertura, cortes, y cada retiro/depósito, de las
+  3 tiendas juntas.

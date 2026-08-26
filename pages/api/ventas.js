@@ -9,6 +9,7 @@ export default async function handler(req, res) {
 
   const { items } = req.body;
   const sedeId = session.role === 'admin' ? req.body.sedeId : session.sedeId;
+  const metodoPago = ['efectivo', 'tarjeta', 'transferencia'].includes(req.body.metodoPago) ? req.body.metodoPago : 'efectivo';
   if (!sedeId) return res.status(400).json({ error: 'Falta la tienda' });
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Datos de venta incompletos' });
@@ -85,8 +86,8 @@ export default async function handler(req, res) {
       }
 
       const ventaRes = await client.query(
-        'INSERT INTO ventas (sede_id, total) VALUES ($1, $2) RETURNING *',
-        [sedeId, total]
+        'INSERT INTO ventas (sede_id, total, metodo_pago) VALUES ($1, $2, $3) RETURNING *',
+        [sedeId, total, metodoPago]
       );
       const venta = ventaRes.rows[0];
 

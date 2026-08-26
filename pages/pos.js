@@ -31,6 +31,22 @@ export default function POS({ session }) {
   const [espera, setEspera] = useState([]);
   const [esperaOpen, setEsperaOpen] = useState(false);
 
+  // Caja: apertura/corte/movimientos de efectivo
+  const [caja, setCaja] = useState(null);
+  const [cajaLoading, setCajaLoading] = useState(true);
+  const [aperturaVal, setAperturaVal] = useState('');
+  const [corteOpen, setCorteOpen] = useState(false);
+  const [corteTipo, setCorteTipo] = useState('intermedio');
+  const [corteContado, setCorteContado] = useState('');
+  const [corteNota, setCorteNota] = useState('');
+  const [corteResultado, setCorteResultado] = useState(null);
+  const [retiroOpen, setRetiroOpen] = useState(false);
+  const [retiroTipo, setRetiroTipo] = useState('retiro');
+  const [retiroMonto, setRetiroMonto] = useState('');
+  const [retiroConcepto, setRetiroConcepto] = useState('');
+  const [metodoPago, setMetodoPago] = useState('efectivo');
+  const [notifOpen, setNotifOpen] = useState(false);
+
   // Edición completa de un producto de ESTA tienda (nombre/precio/unidad/stock/mínimo)
   const [editProd, setEditProd] = useState(null);
   const [editVals, setEditVals] = useState({});
@@ -54,10 +70,11 @@ export default function POS({ session }) {
     if (!sedeId) return;
     cargarInventario();
     cargarEspera();
+    cargarCaja();
     setTicket([]);
     // Se refresca sola cada 10s — si Cristian cambia un precio o el stock
     // desde el sistema central, aquí se ve reflejado sin recargar la página.
-    const t = setInterval(cargarInventario, 10000);
+    const t = setInterval(() => { cargarInventario(); cargarCaja(); }, 10000);
     return () => clearInterval(t);
   }, [sedeId]);
 
@@ -67,6 +84,10 @@ export default function POS({ session }) {
 
   function cargarEspera() {
     fetch(`/api/espera?sedeId=${sedeId}`).then((r) => r.json()).then(setEspera);
+  }
+
+  function cargarCaja() {
+    fetch(`/api/caja?sedeId=${sedeId}`).then((r) => r.json()).then((d) => { setCaja(d); setCajaLoading(false); });
   }
 
   function showToast(text, err = false) {
@@ -150,12 +171,14 @@ export default function POS({ session }) {
     const res = await fetch('/api/ventas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sedeId, items }),
+      body: JSON.stringify({ sedeId, items, metodoPago }),
     });
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'No se pudo cobrar', true); return; }
     setTicket([]);
+    setMetodoPago('efectivo');
     cargarInventario();
+    cargarCaja();
     if (data.alertas?.length) {
       showToast(`Venta cobrada. ⚠ Bajo mínimo: ${data.alertas.join(', ')}`, true);
     } else {
@@ -193,6 +216,74 @@ export default function POS({ session }) {
     if (!confirm('¿Borrar esta venta en espera? No se puede deshacer.')) return;
     await fetch(`/api/espera?sedeId=${sedeId}&id=${id}`, { method: 'DELETE' });
     cargarEspera();
+  }
+
+  // ---- Caja: apertura ----
+  async function abrirCaja(e) {
+    e.preventDefault();
+    const fondo = parseFloat(aperturaVal) || 0;
+    const res = await fetch(`/api/caja?sedeId=${sedeId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo: 'apertura', fondoInicial: fondo }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'No se pudo abrir la caja', true); return; }
+    setAperturaVal('');
+    cargarCaja();
+    showToast(`Caja abierta con fondo de $${fondo.toFixed(2)}`);
+  }
+
+  // ---- Caja: corte intermedio o cierre ----
+  function abrirModalCorte(tipo) {
+    setCorteTipo(tipo);
+    setCorteContado('');
+    setCorteNota('');
+    setCorteResultado(null);
+    setCorteOpen(true);
+  }
+
+  async function confirmarCorte() {
+    const contado = parseFloat(corteContado);
+    if (isNaN(contado) || contado < 0) { showToast('Escribe cuánto efectivo contaste', true); return; }
+    const res = await fetch(`/api/caja?sedeId=${sedeId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo: corteTipo, efectivoContado: contado, nota: corteNota || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'No se pudo hacer el corte', true); return; }
+    setCorteResultado(data);
+    cargarCaja();
+  }
+
+  function cerrarModalCorte() {
+    setCorteOpen(false);
+    setCorteResultado(null);
+  }
+
+  // ---- Movimientos de efectivo: retiro / depósito ----
+  function abrirModalRetiro(tipo) {
+    setRetiroTipo(tipo);
+    setRetiroMonto('');
+    setRetiroConcepto('');
+    setRetiroOpen(true);
+  }
+
+  async function confirmarMovimiento(e) {
+    e.preventDefault();
+    const monto = parseFloat(retiroMonto);
+    if (!monto || monto <= 0) { showToast('Monto inválido', true); return; }
+    const res = await fetch(`/api/movimientos?sedeId=${sedeId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo: retiroTipo, monto, concepto: retiroConcepto || null }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'No se pudo registrar', true); return; }
+    setRetiroOpen(false);
+    cargarCaja();
+    showToast(`${retiroTipo === 'retiro' ? 'Retiro' : 'Depósito'} de $${monto.toFixed(2)} registrado.`);
   }
 
   // ---- Crear producto nuevo (solo queda en ESTA tienda) ----
@@ -288,6 +379,17 @@ export default function POS({ session }) {
     return coincideTexto && coincideCategoria;
   });
 
+  // Notificaciones: stock bajo/agotado + caducidad, calculadas del inventario ya cargado.
+  const notifStock = (inv?.inventario || []).filter((p) => Number(p.stock_minimo) > 0 && Number(p.stock_actual) <= Number(p.stock_minimo));
+  const hoy = new Date();
+  const notifCaducidad = (inv?.inventario || []).filter((p) => {
+    if (!p.fecha_caducidad) return false;
+    const soloFecha = String(p.fecha_caducidad).slice(0, 10);
+    const dias = Math.round((new Date(soloFecha + 'T00:00:00') - hoy) / 86400000);
+    return dias <= 15;
+  });
+  const totalNotificaciones = notifStock.length + notifCaducidad.length;
+
   const inicialCajero = esAdmin ? 'A' : (sedeNombre || '?').trim().charAt(0).toUpperCase();
 
   return (
@@ -320,7 +422,66 @@ export default function POS({ session }) {
           </button>
         </div>
 
+        {!cajaLoading && caja?.abierta && (
+          <div className="pos-nav-group">
+            <button className="pos-nav-btn" onClick={() => abrirModalRetiro('retiro')}>
+              <span className="ic">💵</span>Retirar
+            </button>
+            <button className="pos-nav-btn" onClick={() => abrirModalRetiro('deposito')}>
+              <span className="ic">➕</span>Depositar
+            </button>
+            <button className="pos-nav-btn" onClick={() => abrirModalCorte('intermedio')}>
+              <span className="ic">🧾</span>Corte
+            </button>
+            <button className="pos-nav-btn" onClick={() => abrirModalCorte('cierre')}>
+              <span className="ic">🔒</span>Cerrar caja
+            </button>
+          </div>
+        )}
+
         <div className="pos-spacer" />
+
+        <div style={{ position: 'relative' }}>
+          <button className="pos-nav-btn" onClick={() => setNotifOpen(!notifOpen)} style={{ position: 'relative' }}>
+            <span className="ic">🔔</span>
+            {totalNotificaciones > 0 && <span className="badge-count">{totalNotificaciones}</span>}
+          </button>
+          {notifOpen && (
+            <div className="notif-panel">
+              <div className="notif-panel-head">Notificaciones — {sedeNombre}</div>
+              {totalNotificaciones === 0 ? (
+                <p className="sub" style={{ padding: '14px 16px' }}>Todo tranquilo por aquí. ✓</p>
+              ) : (
+                <>
+                  {notifStock.map((p) => (
+                    <div className="notif-item" key={`s-${p.producto_id}`}>
+                      <span className="notif-dot low" />
+                      <div>
+                        <div className="notif-title">{p.nombre}</div>
+                        <div className="notif-sub">
+                          {Number(p.stock_actual) <= 0 ? 'Se agotó' : `Quedan ${p.stock_actual} ${p.unidad_medida}`} — mínimo {p.stock_minimo} {p.unidad_medida}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {notifCaducidad.map((p) => {
+                    const soloFecha = String(p.fecha_caducidad).slice(0, 10);
+                    const dias = Math.round((new Date(soloFecha + 'T00:00:00') - hoy) / 86400000);
+                    return (
+                      <div className="notif-item" key={`c-${p.producto_id}`}>
+                        <span className="notif-dot warn" />
+                        <div>
+                          <div className="notif-title">{p.nombre}</div>
+                          <div className="notif-sub">{dias < 0 ? 'Ya caducó' : dias === 0 ? 'Caduca hoy' : `Caduca en ${dias} día(s)`}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="pos-cashier">
           <div className="pos-cashier-info">
@@ -386,6 +547,25 @@ export default function POS({ session }) {
               <button className="btn" type="submit">Crear en {sedeNombre}</button>
             </form>
           </section>
+        </main>
+      ) : cajaLoading ? (
+        <main className="main" style={{ padding: '60px 28px', textAlign: 'center' }}>
+          <p className="empty-state">Revisando el estado de la caja…</p>
+        </main>
+      ) : !caja?.abierta ? (
+        <main className="main" style={{ padding: '60px 28px', display: 'flex', justifyContent: 'center' }}>
+          <div className="panel" style={{ maxWidth: 380, width: '100%' }}>
+            <h2 className="panel-title">Abrir caja — {sedeNombre}</h2>
+            <p className="page-sub" style={{ marginBottom: 18 }}>
+              Antes de vender, cuenta el efectivo con el que arrancas el día (el "fondo"). Así el corte de caja al final va a poder decirte si sobró o faltó dinero.
+            </p>
+            <form onSubmit={abrirCaja}>
+              <label>Fondo inicial ($)</label>
+              <input type="number" min="0" step="0.01" autoFocus required value={aperturaVal}
+                onChange={(e) => setAperturaVal(e.target.value)} placeholder="0.00" style={{ width: '100%', marginBottom: 16 }} />
+              <button className="btn full" type="submit">Abrir caja</button>
+            </form>
+          </div>
         </main>
       ) : (
         <div className="pos-body">
@@ -473,6 +653,14 @@ export default function POS({ session }) {
               <div className="ticket-actions-row">
                 <button className="btn secondary" onClick={() => setLibreOpen(true)}>+ Libre</button>
                 <button className="btn secondary" disabled={ticket.length === 0} onClick={ponerEnEspera}>En espera</button>
+              </div>
+              <div className="pago-row">
+                {['efectivo', 'tarjeta', 'transferencia'].map((m) => (
+                  <button key={m} type="button" className={`pago-chip ${metodoPago === m ? 'active' : ''}`}
+                    onClick={() => setMetodoPago(m)}>
+                    {m === 'efectivo' ? '💵 Efectivo' : m === 'tarjeta' ? '💳 Tarjeta' : '🏦 Transferencia'}
+                  </button>
+                ))}
               </div>
               <div className="ticket-total-v2">
                 <span className="lbl">Total</span>
@@ -620,6 +808,61 @@ export default function POS({ session }) {
             )}
             <button className="btn secondary full" style={{ marginTop: 14 }} onClick={() => setEsperaOpen(false)}>Cerrar</button>
           </div>
+        </div>
+      )}
+
+      {corteOpen && (
+        <div className="qty-modal-bg" onClick={(e) => { if (e.target === e.currentTarget && corteResultado) cerrarModalCorte(); }}>
+          <div className="qty-modal">
+            {!corteResultado ? (
+              <>
+                <h3>{corteTipo === 'cierre' ? 'Cerrar caja' : 'Corte intermedio'} — {sedeNombre}</h3>
+                <p className="sub" style={{ marginBottom: 14 }}>
+                  Cuenta el efectivo físico que hay ahora mismo en la caja y escríbelo aquí.
+                </p>
+                <label>Efectivo contado ($)</label>
+                <input type="number" min="0" step="0.01" autoFocus value={corteContado}
+                  onChange={(e) => setCorteContado(e.target.value)} style={{ marginBottom: 12 }} />
+                <label>Nota (opcional)</label>
+                <input value={corteNota} onChange={(e) => setCorteNota(e.target.value)} placeholder="Ej. faltó cambio en la mañana" />
+                <div className="row" style={{ marginTop: 16 }}>
+                  <button className="btn secondary" onClick={() => setCorteOpen(false)}>Cancelar</button>
+                  <button className="btn" onClick={confirmarCorte}>Confirmar</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3>{corteTipo === 'cierre' ? 'Caja cerrada' : 'Corte registrado'}</h3>
+                <div className="corte-resultado">
+                  <div className="fila"><span>Efectivo esperado</span><span className="mono">${Number(corteResultado.efectivo_esperado).toFixed(2)}</span></div>
+                  <div className="fila"><span>Efectivo contado</span><span className="mono">${Number(corteResultado.efectivo_contado).toFixed(2)}</span></div>
+                  <div className={`fila total ${Number(corteResultado.diferencia) === 0 ? 'ok' : Number(corteResultado.diferencia) > 0 ? 'sobrante' : 'faltante'}`}>
+                    <span>{Number(corteResultado.diferencia) === 0 ? 'Cuadró exacto' : Number(corteResultado.diferencia) > 0 ? 'Sobrante' : 'Faltante'}</span>
+                    <span className="mono">${Math.abs(Number(corteResultado.diferencia)).toFixed(2)}</span>
+                  </div>
+                </div>
+                <button className="btn full" style={{ marginTop: 16 }} onClick={cerrarModalCorte}>Listo</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {retiroOpen && (
+        <div className="qty-modal-bg" onClick={(e) => { if (e.target === e.currentTarget) setRetiroOpen(false); }}>
+          <form className="qty-modal" onSubmit={confirmarMovimiento}>
+            <h3>{retiroTipo === 'retiro' ? 'Retirar efectivo' : 'Depositar efectivo'}</h3>
+            <p className="sub" style={{ marginBottom: 14 }}>{sedeNombre}</p>
+            <label>Monto ($)</label>
+            <input required type="number" min="0" step="0.01" autoFocus value={retiroMonto}
+              onChange={(e) => setRetiroMonto(e.target.value)} style={{ marginBottom: 12 }} />
+            <label>Concepto (opcional)</label>
+            <input value={retiroConcepto} onChange={(e) => setRetiroConcepto(e.target.value)} placeholder="Ej. pago a proveedor" />
+            <div className="row" style={{ marginTop: 16 }}>
+              <button className="btn secondary" type="button" onClick={() => setRetiroOpen(false)}>Cancelar</button>
+              <button className="btn" type="submit">{retiroTipo === 'retiro' ? 'Retirar' : 'Depositar'}</button>
+            </div>
+          </form>
         </div>
       )}
 
