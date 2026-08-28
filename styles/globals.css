@@ -506,3 +506,24 @@ button.btn.secondary:hover{ background:var(--danger-soft); color:var(--danger); 
 .corte-resultado .fila.total.ok{ color:var(--ok); }
 .corte-resultado .fila.total.sobrante{ color:var(--amber); }
 .corte-resultado .fila.total.faltante{ color:var(--danger); }
+
+/* ============================================================
+   Recibo de venta — se ve como un ticket real, e imprime limpio
+   ============================================================ */
+.recibo-modal{
+  background:var(--surface); border:1px solid var(--border); border-radius:16px;
+  padding:22px; width:320px; max-height:88vh; overflow-y:auto;
+}
+.recibo-imprimible{ font-family:var(--font-mono); }
+.recibo-header{ text-align:center; padding-bottom:12px; border-bottom:1px dashed var(--border); margin-bottom:10px; font-size:12.5px; color:var(--text-muted); }
+.recibo-header .brand{ display:flex; justify-content:center; margin-bottom:4px; }
+.recibo-items{ border-bottom:1px dashed var(--border); padding-bottom:8px; margin-bottom:8px; }
+.recibo-linea{ font-size:12.5px; padding:6px 0; }
+.recibo-linea > div:first-child{ font-weight:700; font-family:var(--font-body); margin-bottom:2px; }
+.recibo-total{ display:flex; justify-content:space-between; font-size:18px; font-weight:800; padding-top:4px; }
+
+@media print{
+  body *{ visibility:hidden; }
+  .recibo-imprimible, .recibo-imprimible *{ visibility:visible; }
+  .recibo-imprimible{ position:absolute; top:0; left:0; width:100%; }
+}

@@ -83,6 +83,13 @@ que el trabajador tenga que recargar la página.
   "En espera (N)" arriba para retomarlo después, incluso si se cerró la
   pestaña.
 
+## Recibo de venta (Fase 5)
+
+Al cobrar, ahora se abre un recibo con el detalle de la venta (productos,
+cantidades, precios, total, método de pago) — con botón para **Imprimir**
+(usa el diálogo de impresión del navegador, así que funciona con cualquier
+impresora de tickets conectada a la compu/tablet) o simplemente cerrar.
+
 ## Caja real (Fase 4)
 
 - **Apertura obligatoria**: antes de vender, hay que abrir la caja con el

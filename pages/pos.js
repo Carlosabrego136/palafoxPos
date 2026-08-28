@@ -46,6 +46,8 @@ export default function POS({ session }) {
   const [retiroConcepto, setRetiroConcepto] = useState('');
   const [metodoPago, setMetodoPago] = useState('efectivo');
   const [notifOpen, setNotifOpen] = useState(false);
+  const [reciboOpen, setReciboOpen] = useState(false);
+  const [reciboData, setReciboData] = useState(null);
 
   // Edición completa de un producto de ESTA tienda (nombre/precio/unidad/stock/mínimo)
   const [editProd, setEditProd] = useState(null);
@@ -175,6 +177,8 @@ export default function POS({ session }) {
     });
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'No se pudo cobrar', true); return; }
+    setReciboData({ venta: data.venta, items: ticket, metodoPago, sedeNombre });
+    setReciboOpen(true);
     setTicket([]);
     setMetodoPago('efectivo');
     cargarInventario();
@@ -863,6 +867,41 @@ export default function POS({ session }) {
               <button className="btn" type="submit">{retiroTipo === 'retiro' ? 'Retirar' : 'Depositar'}</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {reciboOpen && reciboData && (
+        <div className="qty-modal-bg" onClick={(e) => { if (e.target === e.currentTarget) setReciboOpen(false); }}>
+          <div className="recibo-modal">
+            <div className="recibo-imprimible">
+              <div className="recibo-header">
+                <div className="brand" style={{ fontSize: 20, justifyContent: 'center' }}>PALA<span>FOX</span></div>
+                <div>{reciboData.sedeNombre}</div>
+                <div className="mono">{new Date(reciboData.venta.fecha).toLocaleString('es-MX')}</div>
+                <div className="mono">Venta #{reciboData.venta.id}</div>
+              </div>
+              <div className="recibo-items">
+                {reciboData.items.map((t, i) => (
+                  <div className="recibo-linea" key={i}>
+                    <div>{t.nombre}{t.libre ? ' (libre)' : ''}</div>
+                    <div className="mono">{t.cantidad} {t.unidad_medida} × ${Number(t.precio_venta).toFixed(2)} = ${(t.cantidad * t.precio_venta).toFixed(2)}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="recibo-total">
+                <span>TOTAL</span>
+                <span className="mono">${Number(reciboData.venta.total).toFixed(2)}</span>
+              </div>
+              <div className="mono" style={{ textAlign: 'center', marginTop: 10, fontSize: 12 }}>
+                Pago: {reciboData.metodoPago === 'efectivo' ? 'EFECTIVO' : reciboData.metodoPago === 'tarjeta' ? 'TARJETA' : 'TRANSFERENCIA'}
+              </div>
+              <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12.5, color: 'var(--text-dim)' }}>¡Gracias por su compra!</div>
+            </div>
+            <div className="row" style={{ marginTop: 18 }}>
+              <button className="btn secondary" onClick={() => setReciboOpen(false)}>Cerrar</button>
+              <button className="btn" onClick={() => window.print()}>Imprimir</button>
+            </div>
+          </div>
         </div>
       )}
 
