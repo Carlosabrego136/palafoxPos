@@ -49,13 +49,6 @@ export default function POS({ session }) {
   const [reciboOpen, setReciboOpen] = useState(false);
   const [reciboData, setReciboData] = useState(null);
 
-  // Edición completa de un producto de ESTA tienda (nombre/precio/unidad/stock/mínimo)
-  const [editProd, setEditProd] = useState(null);
-  const [editVals, setEditVals] = useState({});
-
-  // Catálogo — crear producto nuevo (queda solo en esta tienda)
-  const [nuevo, setNuevo] = useState({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', stockInicial: '', stockMinimo: '', precioMayoreo: '', cantidadMayoreo: '' });
-
   // Solo para acomodo visual: buscador y filtro de categoría en la pantalla de venta.
   const [busqueda, setBusqueda] = useState('');
   const [categoriaActiva, setCategoriaActiva] = useState('todas');
@@ -290,95 +283,12 @@ export default function POS({ session }) {
     showToast(`${retiroTipo === 'retiro' ? 'Retiro' : 'Depósito'} de $${monto.toFixed(2)} registrado.`);
   }
 
-  // ---- Crear producto nuevo (solo queda en ESTA tienda) ----
-  async function crearProducto(e) {
-    e.preventDefault();
-    const res = await fetch('/api/productos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        skuCodigo: nuevo.skuCodigo || null,
-        nombre: nuevo.nombre,
-        unidadMedida: nuevo.unidadMedida,
-        precioVenta: parseFloat(nuevo.precioVenta),
-        sedeId,
-        stockInicial: parseFloat(nuevo.stockInicial) || 0,
-        stockMinimo: parseFloat(nuevo.stockMinimo) || 0,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) { showToast(data.error || 'No se pudo crear', true); return; }
-    if (nuevo.precioMayoreo) {
-      await fetch('/api/productos', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: data.id,
-          precioMayoreo: parseFloat(nuevo.precioMayoreo),
-          cantidadMayoreo: parseFloat(nuevo.cantidadMayoreo) || 0,
-        }),
-      });
-    }
-    showToast(`"${data.nombre}" creado en ${sedeNombre}.`);
-    setNuevo({ skuCodigo: '', nombre: '', unidadMedida: 'kg', precioVenta: '', stockInicial: '', stockMinimo: '', precioMayoreo: '', cantidadMayoreo: '' });
-    cargarInventario();
-  }
-
-  // ---- Editar producto completo (nombre/precio/unidad/stock/mínimo/mayoreo) ----
-  function abrirEdicion(p) {
-    setEditProd(p);
-    setEditVals({
-      nombre: p.nombre,
-      unidadMedida: p.unidad_medida,
-      precioVenta: String(p.precio_venta),
-      stockActual: String(p.stock_actual),
-      stockMinimo: String(p.stock_minimo),
-      precioMayoreo: p.precio_mayoreo ? String(p.precio_mayoreo) : '',
-      cantidadMayoreo: p.cantidad_mayoreo ? String(p.cantidad_mayoreo) : '',
-    });
-  }
-
-  async function guardarEdicion() {
-    await fetch('/api/productos', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: editProd.producto_id,
-        nombre: editVals.nombre,
-        unidadMedida: editVals.unidadMedida,
-        precioVenta: parseFloat(editVals.precioVenta),
-        precioMayoreo: editVals.precioMayoreo === '' ? '' : parseFloat(editVals.precioMayoreo),
-        cantidadMayoreo: editVals.cantidadMayoreo === '' ? '' : parseFloat(editVals.cantidadMayoreo),
-      }),
-    });
-    await fetch(`/api/inventario?sedeId=${sedeId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        productoId: editProd.producto_id,
-        stockActual: parseFloat(editVals.stockActual),
-        stockMinimo: parseFloat(editVals.stockMinimo),
-      }),
-    });
-    setEditProd(null);
-    cargarInventario();
-    showToast('Producto actualizado.');
-  }
-
-  async function quitarDeTienda() {
-    if (!confirm(`¿Quitar "${editProd.nombre}" de ${sedeNombre}? Sigue existiendo en las demás tiendas.`)) return;
-    await fetch(`/api/inventario?sedeId=${sedeId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productoId: editProd.producto_id, disponible: false }),
-    });
-    setEditProd(null);
-    cargarInventario();
-  }
-
   const categorias = ['todas', ...new Set((inv?.inventario || []).map((p) => p.categoria).filter(Boolean))];
-  const inventarioFiltrado = (inv?.inventario || []).filter((p) => {
-    const coincideTexto = !busqueda || p.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (p.sku_codigo || '').toLowerCase().includes(busqueda.toLowerCase());
+  // Los artículos NO se listan solos — solo aparecen cuando hay una búsqueda activa
+  // (por nombre, palabra clave, o SKU/código completo).
+  const hayBusqueda = busqueda.trim().length > 0;
+  const inventarioFiltrado = !hayBusqueda ? [] : (inv?.inventario || []).filter((p) => {
+    const coincideTexto = p.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (p.sku_codigo || '').toLowerCase().includes(busqueda.toLowerCase());
     const coincideCategoria = categoriaActiva === 'todas' || p.categoria === categoriaActiva;
     return coincideTexto && coincideCategoria;
   });
@@ -416,9 +326,6 @@ export default function POS({ session }) {
         <div className="pos-nav-group">
           <button className={`pos-nav-btn ${tab === 'vender' ? 'active' : ''}`} onClick={() => setTab('vender')}>
             <span className="ic">🛒</span>Vender
-          </button>
-          <button className={`pos-nav-btn ${tab === 'catalogo' ? 'active' : ''}`} onClick={() => setTab('catalogo')}>
-            <span className="ic">＋</span>Producto
           </button>
           <button className="pos-nav-btn" onClick={() => setEsperaOpen(true)} style={{ position: 'relative' }}>
             <span className="ic">⏸</span>En espera
@@ -497,62 +404,7 @@ export default function POS({ session }) {
         <button className="btn secondary small" onClick={salir}>Salir</button>
       </header>
 
-      {tab === 'catalogo' ? (
-        <main className="main" style={{ padding: '24px 28px 60px' }}>
-          <section className="panel">
-            <h2 className="panel-title">Nuevo producto en {sedeNombre}</h2>
-            <p className="page-sub" style={{ marginBottom: 16 }}>Este producto solo va a aparecer aquí — no en las otras tiendas.</p>
-            <div className="help-box">
-              <strong>SKU</strong>: código interno opcional, solo para identificarlo rápido.<br/>
-              <strong>Stock inicial</strong>: cuántas unidades tienes ahora mismo — sin esto el producto nace en 0 y no se puede vender hasta que le pongas cantidad.<br/>
-              <strong>Mínimo</strong>: cuando el stock llegue a este número o menos, aparece en Alertas para Cristian. Déjalo en 0 si no quieres alerta.<br/>
-              <strong>Mayoreo (opcional)</strong>: un precio especial que se sugiere solo cuando la venta alcanza la cantidad que pongas — nunca se aplica solo, tú decides si usarlo al cobrar.
-            </div>
-            <form className="form-row" onSubmit={crearProducto}>
-              <div>
-                <label>SKU (opcional)</label>
-                <input value={nuevo.skuCodigo} onChange={(e) => setNuevo({ ...nuevo, skuCodigo: e.target.value })} />
-              </div>
-              <div>
-                <label>Nombre</label>
-                <input required value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
-              </div>
-              <div>
-                <label>Unidad</label>
-                <select value={nuevo.unidadMedida} onChange={(e) => setNuevo({ ...nuevo, unidadMedida: e.target.value })}>
-                  {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-              <div>
-                <label>Precio</label>
-                <input required type="number" min="0" step="0.01" value={nuevo.precioVenta}
-                  onChange={(e) => setNuevo({ ...nuevo, precioVenta: e.target.value })} />
-              </div>
-              <div>
-                <label>Stock inicial</label>
-                <input type="number" min="0" step="any" value={nuevo.stockInicial}
-                  onChange={(e) => setNuevo({ ...nuevo, stockInicial: e.target.value })} placeholder="0" />
-              </div>
-              <div>
-                <label>Mínimo</label>
-                <input type="number" min="0" step="any" value={nuevo.stockMinimo}
-                  onChange={(e) => setNuevo({ ...nuevo, stockMinimo: e.target.value })} placeholder="0" />
-              </div>
-              <div>
-                <label>Precio mayoreo (opcional)</label>
-                <input type="number" min="0" step="0.01" value={nuevo.precioMayoreo}
-                  onChange={(e) => setNuevo({ ...nuevo, precioMayoreo: e.target.value })} placeholder="0.00" />
-              </div>
-              <div>
-                <label>Desde cuánto ({nuevo.unidadMedida})</label>
-                <input type="number" min="0" step="any" value={nuevo.cantidadMayoreo}
-                  onChange={(e) => setNuevo({ ...nuevo, cantidadMayoreo: e.target.value })} placeholder={`ej. 5`} />
-              </div>
-              <button className="btn" type="submit">Crear en {sedeNombre}</button>
-            </form>
-          </section>
-        </main>
-      ) : cajaLoading ? (
+      {cajaLoading ? (
         <main className="main" style={{ padding: '60px 28px', textAlign: 'center' }}>
           <p className="empty-state">Revisando el estado de la caja…</p>
         </main>
@@ -583,7 +435,7 @@ export default function POS({ session }) {
               />
             </div>
 
-            {categorias.length > 1 && (
+            {hayBusqueda && categorias.length > 1 && (
               <div className="category-chip-row">
                 {categorias.map((c) => (
                   <span key={c} className={`category-chip ${categoriaActiva === c ? 'active' : ''}`}
@@ -595,37 +447,36 @@ export default function POS({ session }) {
             )}
 
             <div className="pos-grid-v2">
-              {inv?.inventario.length === 0 && (
-                <p className="empty-state">Esta tienda todavía no tiene productos. Usa "Producto" arriba.</p>
-              )}
-              {inv?.inventario.length > 0 && inventarioFiltrado.length === 0 && (
+              {inv?.inventario.length === 0 ? (
+                <p className="empty-state">Esta tienda todavía no tiene productos. Pídele a Cristian que los agregue desde el sistema central.</p>
+              ) : !hayBusqueda ? (
+                <p className="empty-state">Escribe el nombre, una palabra clave o el código del producto para buscarlo.</p>
+              ) : inventarioFiltrado.length === 0 ? (
                 <p className="empty-state">Nada coincide con esa búsqueda.</p>
-              )}
-              {inventarioFiltrado.map((p) => {
-                const sinStock = Number(p.stock_actual) <= 0;
-                const bajo = Number(p.stock_minimo) > 0 && Number(p.stock_actual) <= Number(p.stock_minimo);
-                return (
-                  <div key={p.producto_id} className={`pos-card-v2 ${sinStock ? 'disabled' : ''}`}
-                    onClick={() => !sinStock && abrirModal(p)}>
-                    <div className="cat-tag">{p.categoria || p.sku_codigo || '—'}</div>
-                    <div className="nm">{p.nombre}</div>
-                    <div className="price-block">
-                      <div className="pr">${Number(p.precio_venta).toFixed(2)} <span className="unit">/ {p.unidad_medida}</span></div>
-                      {p.precio_mayoreo && (
-                        <div className="mayoreo-tag">Mayoreo ${Number(p.precio_mayoreo).toFixed(2)} desde {p.cantidad_mayoreo}</div>
-                      )}
-                      <div className="stock-row">
-                        <span className={`stock-pill ${bajo ? 'low' : ''}`}>
-                          {p.stock_actual} {p.unidad_medida}
-                        </span>
-                        <button className="edit-btn" onClick={(e) => { e.stopPropagation(); abrirEdicion(p); }}>
-                          Editar
-                        </button>
+              ) : (
+                inventarioFiltrado.map((p) => {
+                  const sinStock = Number(p.stock_actual) <= 0;
+                  const bajo = Number(p.stock_minimo) > 0 && Number(p.stock_actual) <= Number(p.stock_minimo);
+                  return (
+                    <div key={p.producto_id} className={`pos-card-v2 ${sinStock ? 'disabled' : ''}`}
+                      onClick={() => !sinStock && abrirModal(p)}>
+                      <div className="cat-tag">{p.categoria || p.sku_codigo || '—'}</div>
+                      <div className="nm">{p.nombre}</div>
+                      <div className="price-block">
+                        <div className="pr">${Number(p.precio_venta).toFixed(2)} <span className="unit">/ {p.unidad_medida}</span></div>
+                        {p.precio_mayoreo && (
+                          <div className="mayoreo-tag">Mayoreo ${Number(p.precio_mayoreo).toFixed(2)} desde {p.cantidad_mayoreo}</div>
+                        )}
+                        <div className="stock-row">
+                          <span className={`stock-pill ${bajo ? 'low' : ''}`}>
+                            {p.stock_actual} {p.unidad_medida}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -722,42 +573,6 @@ export default function POS({ session }) {
               <button className="btn secondary" onClick={() => setModalProd(null)}>Cancelar</button>
               <button className="btn" onClick={agregar}>Agregar</button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {editProd && (
-        <div className="qty-modal-bg" onClick={(e) => { if (e.target === e.currentTarget) setEditProd(null); }}>
-          <div className="qty-modal">
-            <h3>Editar en {sedeNombre}</h3>
-            <label>Nombre</label>
-            <input value={editVals.nombre} onChange={(e) => setEditVals({ ...editVals, nombre: e.target.value })} style={{ marginBottom: 12 }} />
-            <label>Unidad</label>
-            <select value={editVals.unidadMedida} onChange={(e) => setEditVals({ ...editVals, unidadMedida: e.target.value })} style={{ marginBottom: 12, width: '100%' }}>
-              {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
-            </select>
-            <label>Precio</label>
-            <input type="number" min="0" step="0.01" value={editVals.precioVenta}
-              onChange={(e) => setEditVals({ ...editVals, precioVenta: e.target.value })} style={{ marginBottom: 12 }} />
-            <label>Stock en {sedeNombre}</label>
-            <input type="number" min="0" step="any" value={editVals.stockActual}
-              onChange={(e) => setEditVals({ ...editVals, stockActual: e.target.value })} style={{ marginBottom: 12 }} />
-            <label>Mínimo en {sedeNombre}</label>
-            <input type="number" min="0" step="any" value={editVals.stockMinimo}
-              onChange={(e) => setEditVals({ ...editVals, stockMinimo: e.target.value })} style={{ marginBottom: 12 }} />
-            <label>Precio mayoreo (déjalo vacío para desactivarlo)</label>
-            <input type="number" min="0" step="0.01" value={editVals.precioMayoreo}
-              onChange={(e) => setEditVals({ ...editVals, precioMayoreo: e.target.value })} style={{ marginBottom: 12 }} placeholder="Sin mayoreo" />
-            <label>Desde cuánto ({editVals.unidadMedida})</label>
-            <input type="number" min="0" step="any" value={editVals.cantidadMayoreo}
-              onChange={(e) => setEditVals({ ...editVals, cantidadMayoreo: e.target.value })} placeholder="0" />
-            <div className="row" style={{ marginTop: 16 }}>
-              <button className="btn secondary" onClick={() => setEditProd(null)}>Cancelar</button>
-              <button className="btn" onClick={guardarEdicion}>Guardar</button>
-            </div>
-            <button className="btn secondary full" style={{ marginTop: 10 }} onClick={quitarDeTienda}>
-              Quitar de {sedeNombre}
-            </button>
           </div>
         </div>
       )}
