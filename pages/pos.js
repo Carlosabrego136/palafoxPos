@@ -413,7 +413,7 @@ export default function POS({ session }) {
           <div className="panel" style={{ maxWidth: 380, width: '100%' }}>
             <h2 className="panel-title">Abrir caja — {sedeNombre}</h2>
             <p className="page-sub" style={{ marginBottom: 18 }}>
-              Antes de vender, cuenta el efectivo con el que arrancas el día (el "fondo"). Así el corte de caja al final va a poder decirte si sobró o faltó dinero.
+              Antes de vender, cuenta el efectivo con el que arrancas el día (el "fondo"). Al hacer un corte más tarde, solo vas a anotar el efectivo que cuentes — la comparación se revisa desde la base central.
             </p>
             <form onSubmit={abrirCaja}>
               <label>Fondo inicial ($)</label>
@@ -653,13 +653,9 @@ export default function POS({ session }) {
               <>
                 <h3>{corteTipo === 'cierre' ? 'Caja cerrada' : 'Corte registrado'}</h3>
                 <div className="corte-resultado">
-                  <div className="fila"><span>Efectivo esperado</span><span className="mono">${Number(corteResultado.efectivo_esperado).toFixed(2)}</span></div>
                   <div className="fila"><span>Efectivo contado</span><span className="mono">${Number(corteResultado.efectivo_contado).toFixed(2)}</span></div>
-                  <div className={`fila total ${Number(corteResultado.diferencia) === 0 ? 'ok' : Number(corteResultado.diferencia) > 0 ? 'sobrante' : 'faltante'}`}>
-                    <span>{Number(corteResultado.diferencia) === 0 ? 'Cuadró exacto' : Number(corteResultado.diferencia) > 0 ? 'Sobrante' : 'Faltante'}</span>
-                    <span className="mono">${Math.abs(Number(corteResultado.diferencia)).toFixed(2)}</span>
-                  </div>
                 </div>
+                <p className="sub" style={{ marginTop: 10 }}>Quedó registrado. La base central lo revisa y cuadra desde ahí.</p>
                 <button className="btn full" style={{ marginTop: 16 }} onClick={cerrarModalCorte}>Listo</button>
               </>
             )}

@@ -40,21 +40,17 @@ export default async function handler(req, res) {
       const ultimo = ultimoRes.rows[0] || null;
       const abierta = !!ultimo && ultimo.tipo !== 'cierre';
 
-      let resumen = null;
-      if (abierta) {
-        // Buscamos la apertura que originó esta sesión (para el fondo base)
-        const aperturaRes = await query(
-          `SELECT * FROM cortes_caja
-           WHERE sede_id=$1 AND tipo='apertura'
-           ORDER BY fecha DESC LIMIT 1`,
-          [sedeId]
-        );
-        const apertura = aperturaRes.rows[0];
-        resumen = await calcularEsperado(sedeId, apertura.fecha, Number(apertura.fondo_inicial));
-        resumen.apertura = apertura;
-      }
+      // El POS solo necesita saber si la caja está abierta y, si acaso, el
+      // fondo/efectivo contado que ELLOS MISMOS registraron. El "esperado"
+      // y la "diferencia" (sobrante/faltante) NUNCA se le mandan al punto
+      // de venta — esa comparación solo la ve Cristian desde el central,
+      // para poder detectar discrepancias sin que el cajero sepa cuánto
+      // "debería" cuadrar antes de contar.
+      const ultimoSinComparacion = ultimo
+        ? { id: ultimo.id, sede_id: ultimo.sede_id, cajero: ultimo.cajero, tipo: ultimo.tipo, fondo_inicial: ultimo.fondo_inicial, efectivo_contado: ultimo.efectivo_contado, nota: ultimo.nota, fecha: ultimo.fecha }
+        : null;
 
-      return res.status(200).json({ abierta, ultimo, resumen });
+      return res.status(200).json({ abierta, ultimo: ultimoSinComparacion });
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: 'Error al consultar la caja' });
@@ -110,7 +106,12 @@ export default async function handler(req, res) {
         descripcion: `${tipo === 'cierre' ? 'Cerró' : 'Hizo corte intermedio de'} caja — contado $${contado.toFixed(2)}, esperado $${esperado.toFixed(2)} (${signo})`,
       });
 
-      return res.status(201).json(rows[0]);
+      // Igual que en el GET: el cajero solo recibe de vuelta lo que él mismo
+      // contó. El esperado/diferencia queda guardado en la base de datos
+      // (para que Cristian lo revise desde el central) pero no viaja de
+      // regreso al punto de venta.
+      const { efectivo_esperado, diferencia: _diferencia, ...corteSinComparacion } = rows[0];
+      return res.status(201).json(corteSinComparacion);
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: 'Error al registrar el corte' });
