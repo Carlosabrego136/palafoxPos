@@ -6,7 +6,9 @@ export default async function handler(req, res) {
   if (!session) return;
   const sedeId = session.role === 'admin' ? req.query.sedeId : session.sedeId;
   if (!sedeId) return res.status(400).json({ error: 'Falta sedeId' });
-  const cajero = session.role === 'admin' ? 'Cristian (admin)' : session.nombre;
+  const cajero = session.cajeroNombre
+    ? session.cajeroNombre
+    : (session.role === 'admin' ? 'Cristian (admin)' : session.nombre);
 
   if (req.method === 'GET') {
     try {

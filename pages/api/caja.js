@@ -28,7 +28,13 @@ export default async function handler(req, res) {
   if (!session) return;
   const sedeId = session.role === 'admin' ? req.query.sedeId : session.sedeId;
   if (!sedeId) return res.status(400).json({ error: 'Falta sedeId' });
-  const cajero = session.role === 'admin' ? 'Cristian (admin)' : session.nombre;
+  // Si entró con una cuenta individual, usamos su nombre real (para que
+  // quede en el corte quién fue exactamente). Si no, se comporta igual que
+  // siempre: nombre de la tienda, o "Cristian (admin)" para el admin de
+  // toda la vida.
+  const cajero = session.cajeroNombre
+    ? session.cajeroNombre
+    : (session.role === 'admin' ? 'Cristian (admin)' : session.nombre);
 
   if (req.method === 'GET') {
     try {

@@ -304,7 +304,7 @@ export default function POS({ session }) {
   });
   const totalNotificaciones = notifStock.length + notifCaducidad.length;
 
-  const inicialCajero = esAdmin ? 'A' : (sedeNombre || '?').trim().charAt(0).toUpperCase();
+  const inicialCajero = (session.cajeroNombre || (esAdmin ? 'Admin' : sedeNombre) || '?').trim().charAt(0).toUpperCase();
 
   return (
     <div className="pos-page">
@@ -396,7 +396,7 @@ export default function POS({ session }) {
 
         <div className="pos-cashier">
           <div className="pos-cashier-info">
-            <div className="nm">{esAdmin ? 'Cristian' : sedeNombre}</div>
+            <div className="nm">{session.cajeroNombre || (esAdmin ? 'Cristian' : sedeNombre)}</div>
             <div className="rl">{esAdmin ? 'Administrador' : 'Punto de venta'}</div>
           </div>
           <div className="pos-avatar">{inicialCajero}</div>
