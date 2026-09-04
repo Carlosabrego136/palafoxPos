@@ -8,9 +8,9 @@ import { verifyPassword } from '../../../lib/passwords';
 // Si Cristian crea una cuenta individual desde el central con el mismo
 // usuario, esa se revisa primero.
 const TIENDAS = {
-  tienda1: { sedeId: 2, nombre: 'Tienda 1 · Centro', password: process.env.TIENDA1_PASSWORD },
-  tienda2: { sedeId: 3, nombre: 'Tienda 2 · Norte', password: process.env.TIENDA2_PASSWORD },
-  tienda3: { sedeId: 4, nombre: 'Tienda 3 · Express', password: process.env.TIENDA3_PASSWORD },
+  tienda1: { sedeId: 2, nombre: 'Zaragoza centro', password: process.env.TIENDA1_PASSWORD },
+  tienda2: { sedeId: 3, nombre: 'San Miguel avenida', password: process.env.TIENDA2_PASSWORD },
+  tienda3: { sedeId: 4, nombre: 'San Miguel centro', password: process.env.TIENDA3_PASSWORD },
 };
 
 export default async function handler(req, res) {
