@@ -98,9 +98,10 @@ impresora de tickets conectada a la compu/tablet) o simplemente cerrar.
   sentido después.
 - **Retirar / Depositar efectivo**: botones en la barra superior, cada
   movimiento queda registrado con quién, cuánto y por qué.
-- **Nuevo Corte / Cerrar caja**: el cajero cuenta el efectivo físico y el
-  sistema le dice al instante si sobró, faltó, o cuadró exacto — comparando
-  contra fondo + ventas en efectivo + depósitos − retiros.
+- **Nuevo Corte / Cerrar caja**: el cajero solo captura el efectivo que
+  contó — el sistema calcula y guarda el esperado/diferencia, pero eso
+  **no se le muestra al cajero** (corte "a ciegas"). Esa comparación
+  (sobrante/faltante) solo la ve Cristian desde **Caja** en el central.
 - **Método de pago** al cobrar (Efectivo / Tarjeta / Transferencia) — solo
   las ventas en efectivo cuentan para el corte de caja, para que el cálculo
   sea real.
@@ -109,3 +110,15 @@ impresora de tickets conectada a la compu/tablet) o simplemente cerrar.
 - Todo lo anterior lo ve Cristian en tiempo real desde la página **Caja**
   del sistema central — apertura, cortes, y cada retiro/depósito, de las
   3 tiendas juntas.
+
+## Recibo de venta — arreglo de impresión + datos por tienda
+
+- **Arreglado**: el ticket ya no imprime hojas en blanco de más. El
+  problema era la técnica usada para aislar el recibo al imprimir (dejaba
+  el resto de la pantalla "invisible" pero seguía ocupando espacio en la
+  hoja). Ahora el recibo se imprime desde un portal aparte, fuera del
+  árbol de la página — solo se imprime el ticket, nada más.
+- El recibo ahora puede mostrar **dirección, teléfono y un mensaje de pie
+  de página personalizados por tienda** — Cristian los edita desde
+  **Ticket** en el sistema central. Si una tienda no tiene nada
+  configurado, sale el mensaje genérico de siempre.

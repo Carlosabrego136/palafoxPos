@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/router';
 import { getSession } from '../lib/auth';
 
@@ -170,7 +171,7 @@ export default function POS({ session }) {
     });
     const data = await res.json();
     if (!res.ok) { showToast(data.error || 'No se pudo cobrar', true); return; }
-    setReciboData({ venta: data.venta, items: ticket, metodoPago, sedeNombre });
+    setReciboData({ venta: data.venta, items: ticket, metodoPago, sedeNombre, sedeInfo: inv?.sede || null });
     setReciboOpen(true);
     setTicket([]);
     setMetodoPago('efectivo');
@@ -681,13 +682,15 @@ export default function POS({ session }) {
         </div>
       )}
 
-      {reciboOpen && reciboData && (
-        <div className="qty-modal-bg" onClick={(e) => { if (e.target === e.currentTarget) setReciboOpen(false); }}>
+      {reciboOpen && reciboData && typeof document !== 'undefined' && createPortal(
+        <div className="qty-modal-bg recibo-portal" onClick={(e) => { if (e.target === e.currentTarget) setReciboOpen(false); }}>
           <div className="recibo-modal">
             <div className="recibo-imprimible">
               <div className="recibo-header">
                 <div className="brand" style={{ fontSize: 20, justifyContent: 'center' }}>PALA<span>FOX</span></div>
                 <div>{reciboData.sedeNombre}</div>
+                {reciboData.sedeInfo?.recibo_direccion && <div>{reciboData.sedeInfo.recibo_direccion}</div>}
+                {reciboData.sedeInfo?.recibo_telefono && <div>Tel: {reciboData.sedeInfo.recibo_telefono}</div>}
                 <div className="mono">{new Date(reciboData.venta.fecha).toLocaleString('es-MX')}</div>
                 <div className="mono">Venta #{reciboData.venta.id}</div>
               </div>
@@ -706,14 +709,17 @@ export default function POS({ session }) {
               <div className="mono" style={{ textAlign: 'center', marginTop: 10, fontSize: 12 }}>
                 Pago: {reciboData.metodoPago === 'efectivo' ? 'EFECTIVO' : reciboData.metodoPago === 'tarjeta' ? 'TARJETA' : 'TRANSFERENCIA'}
               </div>
-              <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12.5, color: 'var(--text-dim)' }}>¡Gracias por su compra!</div>
+              <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12.5, color: 'var(--text-dim)' }}>
+                {reciboData.sedeInfo?.recibo_mensaje || '¡Gracias por su compra!'}
+              </div>
             </div>
-            <div className="row" style={{ marginTop: 18 }}>
+            <div className="row recibo-botones" style={{ marginTop: 18 }}>
               <button className="btn secondary" onClick={() => setReciboOpen(false)}>Cerrar</button>
               <button className="btn" onClick={() => window.print()}>Imprimir</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.text}</div>}

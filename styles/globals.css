@@ -523,7 +523,18 @@ button.btn.secondary:hover{ background:var(--danger-soft); color:var(--danger); 
 .recibo-total{ display:flex; justify-content:space-between; font-size:18px; font-weight:800; padding-top:4px; }
 
 @media print{
-  body *{ visibility:hidden; }
-  .recibo-imprimible, .recibo-imprimible *{ visibility:visible; }
-  .recibo-imprimible{ position:absolute; top:0; left:0; width:100%; }
+  /* El recibo ahora se imprime desde un portal aparte (ver pos.js),
+     así que basta con ocultar el resto de la app — nada queda
+     "oculto pero ocupando espacio", que era la causa de las hojas
+     en blanco de más. */
+  #__next{ display:none !important; }
+  .recibo-portal{
+    position:static !important; background:none !important; padding:0 !important;
+    display:block !important;
+  }
+  .recibo-portal .recibo-modal{
+    width:100% !important; max-width:100% !important; max-height:none !important; overflow:visible !important;
+    box-shadow:none !important; border:none !important; padding:0 !important;
+  }
+  .recibo-portal .recibo-botones{ display:none !important; }
 }
