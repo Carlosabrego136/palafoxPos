@@ -154,6 +154,46 @@ export default function POS({ session }) {
 
   const total = ticket.reduce((s, t) => s + Number(t.precio_venta) * t.cantidad, 0);
 
+  // Imprime el recibo desde un documento completamente aparte (un iframe
+  // invisible), para que la impresión nunca dependa del resto de la
+  // página — así no hay forma de que "arrastre" contenido de más ni
+  // se quede pidiendo hojas en blanco.
+  function imprimirRecibo() {
+    const contenido = document.getElementById('recibo-imprimible-contenido');
+    if (!contenido) return;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(
+      '<!DOCTYPE html><html><head><meta charset="utf-8" />' +
+      '<style>' +
+      "body{ font-family:'Courier New', monospace; font-size:12px; color:#000; margin:0; padding:12px; }" +
+      '.recibo-header{ text-align:center; padding-bottom:10px; border-bottom:1px dashed #999; margin-bottom:10px; }' +
+      '.recibo-header .brand{ font-weight:700; font-size:16px; margin-bottom:4px; }' +
+      '.recibo-items{ border-bottom:1px dashed #999; padding-bottom:8px; margin-bottom:8px; }' +
+      '.recibo-linea{ padding:6px 0; }' +
+      '.recibo-linea > div:first-child{ font-weight:700; margin-bottom:2px; }' +
+      '.recibo-total{ display:flex; justify-content:space-between; font-size:15px; font-weight:700; padding-top:4px; }' +
+      '</style></head><body>' + contenido.innerHTML + '</body></html>'
+    );
+    doc.close();
+
+    iframe.onload = () => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+      setTimeout(() => document.body.removeChild(iframe), 500);
+    };
+  }
+
   async function cobrar() {
     const items = ticket.map((t) => {
       if (t.libre) {
@@ -685,7 +725,7 @@ export default function POS({ session }) {
       {reciboOpen && reciboData && typeof document !== 'undefined' && createPortal(
         <div className="qty-modal-bg recibo-portal" onClick={(e) => { if (e.target === e.currentTarget) setReciboOpen(false); }}>
           <div className="recibo-modal">
-            <div className="recibo-imprimible">
+            <div className="recibo-imprimible" id="recibo-imprimible-contenido">
               <div className="recibo-header">
                 <div className="brand" style={{ fontSize: 20, justifyContent: 'center' }}>PALA<span>FOX</span></div>
                 <div>{reciboData.sedeNombre}</div>
@@ -715,7 +755,7 @@ export default function POS({ session }) {
             </div>
             <div className="row recibo-botones" style={{ marginTop: 18 }}>
               <button className="btn secondary" onClick={() => setReciboOpen(false)}>Cerrar</button>
-              <button className="btn" onClick={() => window.print()}>Imprimir</button>
+              <button className="btn" onClick={imprimirRecibo}>Imprimir</button>
             </div>
           </div>
         </div>,
