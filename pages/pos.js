@@ -176,7 +176,14 @@ export default function POS({ session }) {
     doc.write(
       '<!DOCTYPE html><html><head><meta charset="utf-8" />' +
       '<style>' +
-      "body{ font-family:'Courier New', monospace; font-size:12px; color:#000; margin:0; padding:12px; }" +
+      // Esto es lo que evita el papel en blanco de más: le dice a la
+      // impresora que el "tamaño de página" es de 80mm de ancho (medida
+      // típica de rollo térmico) y de LARGO AUTOMÁTICO — es decir, que
+      // corte justo donde termina el contenido, no en una hoja completa.
+      '@page{ size:80mm auto; margin:2mm; }' +
+      '*{ box-sizing:border-box; }' +
+      "html,body{ width:100%; margin:0; padding:0; }" +
+      "body{ font-family:'Courier New', monospace; font-size:12px; color:#000; }" +
       '.recibo-header{ text-align:center; padding-bottom:10px; border-bottom:1px dashed #999; margin-bottom:10px; }' +
       '.recibo-header .brand{ font-weight:700; font-size:16px; margin-bottom:4px; }' +
       '.recibo-items{ border-bottom:1px dashed #999; padding-bottom:8px; margin-bottom:8px; }' +
