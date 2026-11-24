@@ -116,9 +116,25 @@ export default function POS({ session }) {
     ? (parseFloat(importeVal) > 0 && parseFloat(precioVal) > 0 ? parseFloat(importeVal) / parseFloat(precioVal) : 0)
     : parseFloat(qtyVal) || 0;
 
-  const sugerirMayoreo = modalProd && modalProd.cantidad_mayoreo && modalProd.precio_mayoreo &&
-    cantidadEfectiva >= Number(modalProd.cantidad_mayoreo) &&
-    Number(precioVal) !== Number(modalProd.precio_mayoreo);
+  // Mayoreo: solo se puede usar el precio de mayoreo registrado (nunca un
+  // precio escrito a mano), y solo cuando la cantidad alcanza el mínimo.
+  const mayoreoActivo = !!(modalProd && modalProd.precio_mayoreo &&
+    Number(precioVal) === Number(modalProd.precio_mayoreo));
+  const mayoreoDisponible = !!(modalProd && modalProd.cantidad_mayoreo && modalProd.precio_mayoreo &&
+    (mayoreoActivo || cantidadEfectiva >= Number(modalProd.cantidad_mayoreo)));
+
+  // Teclado de la ventana de cantidad: Enter agrega; ← / → alternan entre
+  // "Por cantidad" y "Por importe" mientras el campo está vacío (si ya hay
+  // un número escrito, las flechas se quedan para mover el cursor).
+  function teclasModalCantidad(e) {
+    if (e.key === 'Enter') { e.preventDefault(); agregar(); return; }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      if (e.currentTarget.value === '') {
+        e.preventDefault();
+        setModoCantidad((m) => (m === 'cantidad' ? 'importe' : 'cantidad'));
+      }
+    }
+  }
 
   function agregar() {
     const cant = modoCantidad === 'importe' ? cantidadEfectiva : parseFloat(qtyVal);
@@ -754,41 +770,44 @@ export default function POS({ session }) {
             <h3>{modalProd.nombre}</h3>
             <p className="sub">{modalProd.stock_actual} {modalProd.unidad_medida} disponibles</p>
 
-            <div className="row" style={{ marginBottom: 12 }}>
-              <button type="button" className={`btn small ${modoCantidad === 'cantidad' ? '' : 'secondary'}`}
+            <div className="row" style={{ marginBottom: 6 }}>
+              <button type="button" tabIndex={-1} className={`btn small ${modoCantidad === 'cantidad' ? '' : 'secondary'}`}
                 onClick={() => setModoCantidad('cantidad')}>Por cantidad</button>
-              <button type="button" className={`btn small ${modoCantidad === 'importe' ? '' : 'secondary'}`}
+              <button type="button" tabIndex={-1} className={`btn small ${modoCantidad === 'importe' ? '' : 'secondary'}`}
                 onClick={() => setModoCantidad('importe')}>Por importe ($)</button>
             </div>
+            <p className="qty-hint"><kbd>←</kbd> <kbd>→</kbd> cambiar modo</p>
 
             {modoCantidad === 'cantidad' ? (
               <>
                 <label>Cantidad ({modalProd.unidad_medida})</label>
                 <input type="number" min="0" step="any" autoFocus value={qtyVal}
                   onChange={(e) => setQtyVal(e.target.value)} style={{ marginBottom: 12 }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }} />
+                  onKeyDown={teclasModalCantidad} />
               </>
             ) : (
               <>
                 <label>El cliente quiere pagar ($)</label>
                 <input type="number" min="0" step="0.01" autoFocus value={importeVal}
                   onChange={(e) => setImporteVal(e.target.value)} style={{ marginBottom: 6 }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }} />
+                  onKeyDown={teclasModalCantidad} />
                 <p className="sub" style={{ marginBottom: 12 }}>
-                  = {cantidadEfectiva > 0 ? cantidadEfectiva.toFixed(3) : '0'} {modalProd.unidad_medida}
+                  = {cantidadEfectiva > 0 ? fmtCant(cantidadEfectiva) : '0'} {modalProd.unidad_medida}
                 </p>
               </>
             )}
 
-            <label>Precio (puedes ajustarlo)</label>
-            <input type="number" min="0" step="0.01" value={precioVal}
-              onChange={(e) => setPrecioVal(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') agregar(); }} />
+            <div className="qty-precio">
+              <span>Precio{mayoreoActivo ? ' (mayoreo)' : ''}</span>
+              <strong>${Number(precioVal).toFixed(2)} / {modalProd.unidad_medida}</strong>
+            </div>
 
-            {sugerirMayoreo && (
-              <button type="button" className="btn small secondary full" style={{ marginTop: 10 }}
-                onClick={() => setPrecioVal(String(modalProd.precio_mayoreo))}>
-                Usar precio mayoreo (${Number(modalProd.precio_mayoreo).toFixed(2)}) — aplica desde {modalProd.cantidad_mayoreo} {modalProd.unidad_medida}
+            {mayoreoDisponible && (
+              <button type="button" tabIndex={-1} className="btn small secondary full" style={{ marginTop: 10 }}
+                onClick={() => setPrecioVal(String(mayoreoActivo ? modalProd.precio_venta : modalProd.precio_mayoreo))}>
+                {mayoreoActivo
+                  ? `Quitar mayoreo (volver a $${Number(modalProd.precio_venta).toFixed(2)})`
+                  : `Usar precio mayoreo ($${Number(modalProd.precio_mayoreo).toFixed(2)}) — desde ${modalProd.cantidad_mayoreo} ${modalProd.unidad_medida}`}
               </button>
             )}
 

@@ -50,7 +50,7 @@ export default async function handler(req, res) {
         const stockActual = Number(invRes.rows[0]?.stock_actual || 0);
         const stockMinimo = Number(invRes.rows[0]?.stock_minimo || 0);
 
-        const prodRes = await client.query('SELECT precio_venta, nombre FROM productos WHERE id=$1 AND activo = true', [item.productoId]);
+        const prodRes = await client.query('SELECT precio_venta, precio_mayoreo, nombre FROM productos WHERE id=$1 AND activo = true', [item.productoId]);
         if (prodRes.rows.length === 0) throw new Error('Producto no disponible');
         const nombreProd = prodRes.rows[0].nombre;
 
@@ -58,7 +58,17 @@ export default async function handler(req, res) {
           throw new Error(`Stock insuficiente de ${nombreProd}`);
         }
 
-        const precio = item.precioOverride ? Number(item.precioOverride) : Number(prodRes.rows[0].precio_venta);
+        // Los precios ya no se ajustan a mano: solo vale el precio de catálogo
+        // o, si el producto lo tiene, el de mayoreo registrado.
+        let precio = Number(prodRes.rows[0].precio_venta);
+        if (item.precioOverride) {
+          const pm = Number(prodRes.rows[0].precio_mayoreo);
+          if (pm > 0 && Math.abs(Number(item.precioOverride) - pm) < 0.005) {
+            precio = pm;
+          } else if (Math.abs(Number(item.precioOverride) - precio) >= 0.005) {
+            throw new Error(`Precio no válido para ${nombreProd}`);
+          }
+        }
         const subtotal = precio * item.cantidad;
         total += subtotal;
         itemsParaGuardar.push({

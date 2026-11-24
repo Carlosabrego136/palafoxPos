@@ -582,3 +582,9 @@ button.btn.secondary:hover{ background:var(--danger-soft); color:var(--danger); 
 .recibo-pago{ display:flex; justify-content:space-between; font-size:13px; padding:1px 0; }
 .recibo-modal .recibo-botones{ display:flex; gap:10px; }
 .recibo-modal .recibo-botones button{ flex:1; }
+
+/* Ventana de cantidad: precio fijo + ayuda de teclado */
+.qty-hint{ font-size:12px; color:var(--text-muted); margin:0 0 12px; text-align:center; }
+.qty-hint kbd{ display:inline-block; min-width:20px; padding:1px 6px; border:1px solid var(--border); border-bottom-width:2px; border-radius:5px; font-size:11.5px; background:var(--surface); }
+.qty-precio{ display:flex; justify-content:space-between; align-items:baseline; padding:10px 12px; border-radius:10px; background:var(--bg, rgba(0,0,0,0.04)); font-size:13.5px; color:var(--text-muted); }
+.qty-precio strong{ color:var(--text); font-size:16px; }
