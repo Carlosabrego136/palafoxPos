@@ -519,7 +519,11 @@ button.btn.secondary:hover{ background:var(--danger-soft); color:var(--danger); 
 .recibo-header .brand{ display:flex; justify-content:center; margin-bottom:4px; }
 .recibo-items{ border-bottom:1px dashed var(--border); padding-bottom:8px; margin-bottom:8px; }
 .recibo-linea{ font-size:12.5px; padding:6px 0; }
-.recibo-linea > div:first-child{ font-weight:700; font-family:var(--font-body); margin-bottom:2px; }
+.recibo-linea .recibo-nombre{ font-weight:700; font-family:var(--font-body); margin-bottom:2px; }
+.recibo-detalle{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.recibo-detalle .sub{ font-weight:700; white-space:nowrap; }
+.recibo-metodo{ text-align:center; margin-top:10px; font-size:12px; }
+.recibo-gracias{ text-align:center; margin-top:16px; font-size:12.5px; color:var(--text-dim); }
 .recibo-total{ display:flex; justify-content:space-between; font-size:18px; font-weight:800; padding-top:4px; }
 
 @media print{

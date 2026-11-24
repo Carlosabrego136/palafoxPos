@@ -167,6 +167,20 @@ export default function POS({ session }) {
 
   const total = ticket.reduce((s, t) => s + Number(t.precio_venta) * t.cantidad, 0);
 
+  // Cantidad legible: máximo 3 decimales, sin ceros sobrantes (0.359, 2, 1.5).
+  function fmtCant(n) {
+    const x = Number(n);
+    if (!isFinite(x)) return String(n);
+    return String(parseFloat(x.toFixed(3)));
+  }
+  // Fecha corta para el ticket: 24/11/2026 09:42 (sin segundos).
+  function fmtFechaTicket(f) {
+    const d = new Date(f);
+    if (isNaN(d.getTime())) return '';
+    const p2 = (v) => String(v).padStart(2, '0');
+    return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  }
+
   // Imprime el recibo desde un documento completamente aparte (un iframe
   // invisible), para que la impresión nunca dependa del resto de la
   // página — así no hay forma de que "arrastre" contenido de más ni
@@ -196,15 +210,24 @@ export default function POS({ session }) {
       '@page{ size:80mm auto; margin:2mm; }' +
       '*{ box-sizing:border-box; }' +
       "html,body{ width:100%; margin:0; padding:0; }" +
-      "body{ font-family:'Courier New', monospace; font-size:12px; color:#000; }" +
-      '.recibo-header{ text-align:center; padding-bottom:10px; border-bottom:1px dashed #999; margin-bottom:10px; }' +
-      '.recibo-header .brand{ font-weight:700; font-size:16px; margin-bottom:4px; }' +
-      '.recibo-items{ border-bottom:1px dashed #999; padding-bottom:8px; margin-bottom:8px; }' +
-      '.recibo-linea{ padding:6px 0; }' +
-      '.recibo-linea > div:first-child{ font-weight:700; margin-bottom:2px; }' +
-      '.recibo-total{ display:flex; justify-content:space-between; font-size:15px; font-weight:700; padding-top:4px; }' +
-      '.recibo-pagos{ padding-top:6px; }' +
-      '.recibo-pago{ display:flex; justify-content:space-between; font-size:13px; padding:1px 0; }' +
+      // Tipografía gruesa, negro puro y un poco más grande: las térmicas
+      // pierden los trazos delgados, así que todo el ticket va en negritas
+      // y con un contorno mínimo que engrosa el trazo sin cambiar el tamaño.
+      "body{ font-family:Arial, Helvetica, sans-serif; font-size:14px; font-weight:700; line-height:1.25; color:#000; -webkit-text-stroke:0.35px #000; }" +
+      '.recibo-header{ text-align:center; padding-bottom:8px; border-bottom:2px dashed #000; margin-bottom:8px; font-size:13px; }' +
+      '.recibo-header .brand{ font-weight:900; font-size:22px; letter-spacing:1px; margin-bottom:4px; display:block; }' +
+      '.recibo-header .brand span{ font-weight:900; }' +
+      '.recibo-header .fecha{ font-size:13px; margin-top:2px; }' +
+      '.recibo-items{ border-bottom:2px dashed #000; padding-bottom:6px; margin-bottom:8px; }' +
+      '.recibo-linea{ padding:5px 0; }' +
+      '.recibo-nombre{ font-weight:900; font-size:14px; margin-bottom:1px; word-break:break-word; }' +
+      '.recibo-detalle{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; font-size:13px; }' +
+      '.recibo-detalle .sub{ font-weight:900; font-size:14px; white-space:nowrap; }' +
+      '.recibo-total{ display:flex; justify-content:space-between; font-size:20px; font-weight:900; padding:4px 0; }' +
+      '.recibo-pagos{ padding-top:4px; }' +
+      '.recibo-pago{ display:flex; justify-content:space-between; font-size:15px; padding:1px 0; }' +
+      '.recibo-metodo{ text-align:center; margin-top:8px; font-size:13px; }' +
+      '.recibo-gracias{ text-align:center; margin-top:10px; font-size:13px; }' +
       '</style></head><body>' + contenido.innerHTML + '</body></html>'
     );
     doc.close();
@@ -691,7 +714,7 @@ export default function POS({ session }) {
                   <div className="ticket-row-v2" key={idx}>
                     <div>
                       <div className="n">{t.nombre}{t.libre ? ' (libre)' : ''}</div>
-                      <div className="q">{t.cantidad} {t.unidad_medida} × ${Number(t.precio_venta).toFixed(2)}</div>
+                      <div className="q">{fmtCant(t.cantidad)} {t.unidad_medida} × ${Number(t.precio_venta).toFixed(2)}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span className="amt">${(t.cantidad * t.precio_venta).toFixed(2)}</span>
@@ -949,14 +972,17 @@ export default function POS({ session }) {
                 <div>{reciboData.sedeNombre}</div>
                 {reciboData.sedeInfo?.recibo_direccion && <div>{reciboData.sedeInfo.recibo_direccion}</div>}
                 {reciboData.sedeInfo?.recibo_telefono && <div>Tel: {reciboData.sedeInfo.recibo_telefono}</div>}
-                <div className="mono">{new Date(reciboData.venta.fecha).toLocaleString('es-MX')}</div>
+                <div className="mono fecha">{fmtFechaTicket(reciboData.venta.fecha)}</div>
                 <div className="mono">Venta #{reciboData.venta.id}</div>
               </div>
               <div className="recibo-items">
                 {reciboData.items.map((t, i) => (
                   <div className="recibo-linea" key={i}>
-                    <div>{t.nombre}{t.libre ? ' (libre)' : ''}</div>
-                    <div className="mono">{t.cantidad} {t.unidad_medida} × ${Number(t.precio_venta).toFixed(2)} = ${(t.cantidad * t.precio_venta).toFixed(2)}</div>
+                    <div className="recibo-nombre">{t.nombre}{t.libre ? ' (libre)' : ''}</div>
+                    <div className="recibo-detalle">
+                      <span>{fmtCant(t.cantidad)} {t.unidad_medida} × ${Number(t.precio_venta).toFixed(2)}</span>
+                      <span className="sub">${(t.cantidad * t.precio_venta).toFixed(2)}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -970,10 +996,10 @@ export default function POS({ session }) {
                   <div className="recibo-pago"><span>Cambio</span><span className="mono">${Number(reciboData.cambio || 0).toFixed(2)}</span></div>
                 </div>
               )}
-              <div className="mono" style={{ textAlign: 'center', marginTop: 10, fontSize: 12 }}>
+              <div className="mono recibo-metodo">
                 Pago: {reciboData.metodoPago === 'efectivo' ? 'EFECTIVO' : reciboData.metodoPago === 'tarjeta' ? 'TARJETA' : 'TRANSFERENCIA'}
               </div>
-              <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12.5, color: 'var(--text-dim)' }}>
+              <div className="recibo-gracias">
                 {reciboData.sedeInfo?.recibo_mensaje || '¡Gracias por su compra!'}
               </div>
             </div>
