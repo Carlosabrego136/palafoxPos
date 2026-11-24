@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/router';
 import { getSession } from '../lib/auth';
@@ -10,6 +10,9 @@ export async function getServerSideProps({ req }) {
 }
 
 const UNIDADES = ['kg', 'gr', 'lt', 'pza'];
+
+// Para buscar sin que importen mayúsculas ni acentos ("azúcar" = "AZUCAR").
+const normalizar = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 export default function POS({ session }) {
   const router = useRouter();
@@ -49,6 +52,15 @@ export default function POS({ session }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [reciboOpen, setReciboOpen] = useState(false);
   const [reciboData, setReciboData] = useState(null);
+
+  // Cobro con teclado: ventana de cobro (pagó con / cambio) y selección de resultados.
+  const [cobroOpen, setCobroOpen] = useState(false);
+  const [pagoCon, setPagoCon] = useState('');
+  const [cobrando, setCobrando] = useState(false);
+  const cobrandoRef = useRef(false); // evita cobrar dos veces si se presiona Enter rápido
+  const [autoImprimir, setAutoImprimir] = useState(false);
+  const [seleccion, setSeleccion] = useState(0);
+  const buscadorRef = useRef(null);
 
   // Solo para acomodo visual: buscador y filtro de categoría en la pantalla de venta.
   const [busqueda, setBusqueda] = useState('');
@@ -130,6 +142,7 @@ export default function POS({ session }) {
       },
     ]);
     setModalProd(null);
+    setBusqueda('');
   }
 
   function agregarLibre(e) {
@@ -190,6 +203,8 @@ export default function POS({ session }) {
       '.recibo-linea{ padding:6px 0; }' +
       '.recibo-linea > div:first-child{ font-weight:700; margin-bottom:2px; }' +
       '.recibo-total{ display:flex; justify-content:space-between; font-size:15px; font-weight:700; padding-top:4px; }' +
+      '.recibo-pagos{ padding-top:6px; }' +
+      '.recibo-pago{ display:flex; justify-content:space-between; font-size:13px; padding:1px 0; }' +
       '</style></head><body>' + contenido.innerHTML + '</body></html>'
     );
     doc.close();
@@ -197,37 +212,78 @@ export default function POS({ session }) {
     iframe.onload = () => {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
-      setTimeout(() => document.body.removeChild(iframe), 500);
+      // Al terminar de imprimir, el teclado regresa a la página (si no, Esc y
+      // Enter se quedarían "atrapados" en el documento invisible de impresión).
+      try { iframe.blur(); window.focus(); } catch (e) { /* nada */ }
+      setTimeout(() => { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 500);
     };
   }
 
-  async function cobrar() {
-    const items = ticket.map((t) => {
-      if (t.libre) {
-        return { libre: true, nombre: t.nombre, unidad: t.unidad_medida, precioUnitario: t.precio_venta, cantidad: t.cantidad };
-      }
-      const item = { productoId: t.producto_id, cantidad: t.cantidad };
-      if (Number(t.precio_venta) !== Number(t.precioOriginal)) item.precioOverride = t.precio_venta;
-      return item;
-    });
+  function abrirCobro() {
+    if (ticket.length === 0 || cobrandoRef.current) return;
+    setPagoCon('');
+    setCobroOpen(true);
+  }
 
-    const res = await fetch('/api/ventas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sedeId, items, metodoPago }),
-    });
-    const data = await res.json();
-    if (!res.ok) { showToast(data.error || 'No se pudo cobrar', true); return; }
-    setReciboData({ venta: data.venta, items: ticket, metodoPago, sedeNombre, sedeInfo: inv?.sede || null });
-    setReciboOpen(true);
-    setTicket([]);
-    setMetodoPago('efectivo');
-    cargarInventario();
-    cargarCaja();
-    if (data.alertas?.length) {
-      showToast(`Venta cobrada. ⚠ Bajo mínimo: ${data.alertas.join(', ')}`, true);
-    } else {
-      showToast(`Venta cobrada por $${Number(data.venta.total).toFixed(2)}`);
+  // Cobra de verdad. Se llama desde la ventana de cobro (Enter o botón).
+  // imprimir=true además abre la impresión del ticket de inmediato.
+  async function confirmarCobro(imprimir = false) {
+    if (cobrandoRef.current || ticket.length === 0) return;
+
+    const totalActual = Math.round(total * 100) / 100;
+    let pagoNum = null;
+    if (metodoPago === 'efectivo') {
+      pagoNum = pagoCon === '' ? totalActual : parseFloat(pagoCon);
+      if (!Number.isFinite(pagoNum)) { showToast('Revisa el monto con el que pagó', true); return; }
+      if (pagoNum + 0.001 < totalActual) {
+        showToast(`Faltan $${(totalActual - pagoNum).toFixed(2)} para completar el pago`, true);
+        return;
+      }
+    }
+
+    cobrandoRef.current = true;
+    setCobrando(true);
+    try {
+      const items = ticket.map((t) => {
+        if (t.libre) {
+          return { libre: true, nombre: t.nombre, unidad: t.unidad_medida, precioUnitario: t.precio_venta, cantidad: t.cantidad };
+        }
+        const item = { productoId: t.producto_id, cantidad: t.cantidad };
+        if (Number(t.precio_venta) !== Number(t.precioOriginal)) item.precioOverride = t.precio_venta;
+        return item;
+      });
+
+      const res = await fetch('/api/ventas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sedeId, items, metodoPago }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'No se pudo cobrar', true); return; }
+
+      const totalVenta = Number(data.venta.total);
+      const cambio = pagoNum === null ? null : Math.max(0, Math.round((pagoNum - totalVenta) * 100) / 100);
+      setReciboData({
+        venta: data.venta, items: ticket, metodoPago, sedeNombre, sedeInfo: inv?.sede || null,
+        pagoCon: pagoNum, cambio,
+      });
+      setCobroOpen(false);
+      setReciboOpen(true);
+      if (imprimir) setAutoImprimir(true);
+      setTicket([]);
+      setMetodoPago('efectivo');
+      cargarInventario();
+      cargarCaja();
+      if (data.alertas?.length) {
+        showToast(`Venta cobrada. ⚠ Bajo mínimo: ${data.alertas.join(', ')}`, true);
+      } else {
+        showToast(`Venta cobrada por $${totalVenta.toFixed(2)}`);
+      }
+    } catch (err) {
+      showToast('No se pudo cobrar. Revisa la conexión e inténtalo de nuevo.', true);
+    } finally {
+      cobrandoRef.current = false;
+      setCobrando(false);
     }
   }
 
@@ -335,11 +391,19 @@ export default function POS({ session }) {
   // Los artículos NO se listan solos — solo aparecen cuando hay una búsqueda activa
   // (por nombre, palabra clave, o SKU/código completo).
   const hayBusqueda = busqueda.trim().length > 0;
+  // Sin importar mayúsculas ni acentos, y con varias palabras ("chile guaj"):
+  // todas las palabras deben aparecer en el nombre o en el código.
+  const palabras = normalizar(busqueda).split(/\s+/).filter(Boolean);
   const inventarioFiltrado = !hayBusqueda ? [] : (inv?.inventario || []).filter((p) => {
-    const coincideTexto = p.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (p.sku_codigo || '').toLowerCase().includes(busqueda.toLowerCase());
+    const texto = normalizar(p.nombre) + ' ' + normalizar(p.sku_codigo);
+    const coincideTexto = palabras.every((w) => texto.includes(w));
     const coincideCategoria = categoriaActiva === 'todas' || p.categoria === categoriaActiva;
     return coincideTexto && coincideCategoria;
   });
+  // Solo se pueden elegir con el teclado los que tienen existencia.
+  const seleccionables = inventarioFiltrado.filter((p) => Number(p.stock_actual) > 0);
+  const seleccionActual = Math.min(seleccion, Math.max(seleccionables.length - 1, 0));
+  const productoSeleccionado = seleccionables[seleccionActual] || null;
 
   // Notificaciones: stock bajo/agotado + caducidad, calculadas del inventario ya cargado.
   const notifStock = (inv?.inventario || []).filter((p) => Number(p.stock_minimo) > 0 && Number(p.stock_actual) <= Number(p.stock_minimo));
@@ -351,6 +415,71 @@ export default function POS({ session }) {
     return dias <= 15;
   });
   const totalNotificaciones = notifStock.length + notifCaducidad.length;
+
+  const totalRedondeado = Math.round(total * 100) / 100;
+  const pagoNumVista = pagoCon === '' ? totalRedondeado : parseFloat(pagoCon);
+  const cambioVista = Number.isFinite(pagoNumVista) ? Math.round((pagoNumVista - totalRedondeado) * 100) / 100 : null;
+  const algunModal = !!modalProd || libreOpen || esperaOpen || corteOpen || retiroOpen || reciboOpen || cobroOpen;
+
+  function enfocarBuscador() {
+    const el = buscadorRef.current;
+    if (el) { el.focus(); el.select(); }
+  }
+
+  // Al elegir otro producto con las flechas, la tarjeta resaltada se mantiene a la vista.
+  useEffect(() => { setSeleccion(0); }, [busqueda, categoriaActiva]);
+  useEffect(() => {
+    const el = document.querySelector('.pos-card-v2.sel');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+  }, [seleccionActual, busqueda]);
+
+  // Cuando se cierra cualquier ventana, el cursor regresa al buscador.
+  const habiaModal = useRef(false);
+  useEffect(() => {
+    if (habiaModal.current && !algunModal) enfocarBuscador();
+    habiaModal.current = algunModal;
+  }, [algunModal]);
+
+  // Imprime solo después de que el ticket ya se dibujó (cobrar e imprimir).
+  useEffect(() => {
+    if (reciboOpen && autoImprimir) {
+      setAutoImprimir(false);
+      setTimeout(imprimirRecibo, 150);
+    }
+  }, [reciboOpen, autoImprimir]);
+
+  // Atajos de teclado:
+  //   F2 = ir al buscador · Esc = cobrar (sin ventanas abiertas)
+  //   En la ventana de cobro: Enter cobra, Ctrl+Enter cobra e imprime, Esc cancela.
+  //   En el ticket: Enter imprime, Esc cierra.
+  useEffect(() => {
+    function onKey(e) {
+      const k = e.key;
+      if (k === 'F2' && caja?.abierta && !algunModal) { e.preventDefault(); enfocarBuscador(); return; }
+
+      if (cobroOpen) {
+        if (k === 'Escape') { e.preventDefault(); if (!cobrandoRef.current) setCobroOpen(false); return; }
+        if (k === 'Enter') { e.preventDefault(); if (!e.repeat) confirmarCobro(e.ctrlKey || e.metaKey); }
+        return;
+      }
+      if (reciboOpen) {
+        if (k === 'Escape') { e.preventDefault(); setReciboOpen(false); return; }
+        if (k === 'Enter') { e.preventDefault(); if (!e.repeat) imprimirRecibo(); }
+        return;
+      }
+      if (k === 'Escape') {
+        if (modalProd) { setModalProd(null); return; }
+        if (libreOpen) { setLibreOpen(false); return; }
+        if (esperaOpen) { setEsperaOpen(false); return; }
+        if (retiroOpen) { setRetiroOpen(false); return; }
+        if (corteOpen) return;
+        if (notifOpen) { setNotifOpen(false); return; }
+        if (tab === 'vender' && caja?.abierta && ticket.length > 0) { e.preventDefault(); abrirCobro(); }
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const inicialCajero = (session.cajeroNombre || (esAdmin ? 'Admin' : sedeNombre) || '?').trim().charAt(0).toUpperCase();
 
@@ -476,11 +605,31 @@ export default function POS({ session }) {
           <div className="pos-main-col">
             <div className="pos-search-row">
               <input
+                ref={buscadorRef}
+                autoFocus
                 type="text"
                 placeholder="Buscar producto por nombre o SKU..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSeleccion(Math.min(seleccionActual + 1, Math.max(seleccionables.length - 1, 0)));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSeleccion(Math.max(seleccionActual - 1, 0));
+                  } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (productoSeleccionado) abrirModal(productoSeleccionado);
+                  }
+                }}
               />
+            </div>
+            <div className="atajos-bar">
+              <span><kbd>↑</kbd><kbd>↓</kbd> elegir</span>
+              <span><kbd>Enter</kbd> agregar</span>
+              <span><kbd>Esc</kbd> cobrar</span>
+              <span><kbd>F2</kbd> buscar</span>
             </div>
 
             {hayBusqueda && categorias.length > 1 && (
@@ -506,7 +655,8 @@ export default function POS({ session }) {
                   const sinStock = Number(p.stock_actual) <= 0;
                   const bajo = Number(p.stock_minimo) > 0 && Number(p.stock_actual) <= Number(p.stock_minimo);
                   return (
-                    <div key={p.producto_id} className={`pos-card-v2 ${sinStock ? 'disabled' : ''}`}
+                    <div key={p.producto_id}
+                      className={`pos-card-v2 ${sinStock ? 'disabled' : ''} ${productoSeleccionado && productoSeleccionado.producto_id === p.producto_id ? 'sel' : ''}`}
                       onClick={() => !sinStock && abrirModal(p)}>
                       <div className="cat-tag">{p.categoria || p.sku_codigo || '—'}</div>
                       <div className="nm">{p.nombre}</div>
@@ -535,7 +685,7 @@ export default function POS({ session }) {
             </div>
             <div className="ticket-scroll">
               {ticket.length === 0 ? (
-                <p className="empty-ticket">Toca un producto para agregarlo</p>
+                <p className="empty-ticket">Busca un producto y presiona Enter para agregarlo</p>
               ) : (
                 ticket.map((t, idx) => (
                   <div className="ticket-row-v2" key={idx}>
@@ -569,7 +719,7 @@ export default function POS({ session }) {
                 <span className="lbl">Total</span>
                 <span className="amt">${total.toFixed(2)}</span>
               </div>
-              <button className="btn full" disabled={ticket.length === 0} onClick={cobrar}>Cobrar</button>
+              <button className="btn full" disabled={ticket.length === 0} onClick={abrirCobro}>Cobrar <span style={{ opacity: 0.75, fontWeight: 500 }}>(Esc)</span></button>
             </div>
           </div>
         </div>
@@ -592,13 +742,15 @@ export default function POS({ session }) {
               <>
                 <label>Cantidad ({modalProd.unidad_medida})</label>
                 <input type="number" min="0" step="any" autoFocus value={qtyVal}
-                  onChange={(e) => setQtyVal(e.target.value)} style={{ marginBottom: 12 }} />
+                  onChange={(e) => setQtyVal(e.target.value)} style={{ marginBottom: 12 }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }} />
               </>
             ) : (
               <>
                 <label>El cliente quiere pagar ($)</label>
                 <input type="number" min="0" step="0.01" autoFocus value={importeVal}
-                  onChange={(e) => setImporteVal(e.target.value)} style={{ marginBottom: 6 }} />
+                  onChange={(e) => setImporteVal(e.target.value)} style={{ marginBottom: 6 }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } }} />
                 <p className="sub" style={{ marginBottom: 12 }}>
                   = {cantidadEfectiva > 0 ? cantidadEfectiva.toFixed(3) : '0'} {modalProd.unidad_medida}
                 </p>
@@ -621,6 +773,65 @@ export default function POS({ session }) {
               <button className="btn secondary" onClick={() => setModalProd(null)}>Cancelar</button>
               <button className="btn" onClick={agregar}>Agregar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {cobroOpen && (
+        <div className="qty-modal-bg" onClick={(e) => { if (e.target === e.currentTarget && !cobrando) setCobroOpen(false); }}>
+          <div className="qty-modal cobro-modal">
+            <h3>Cobrar</h3>
+            <div className="cobro-label">Total a pagar</div>
+            <div className="cobro-total">${totalRedondeado.toFixed(2)}</div>
+
+            <div className="pago-row">
+              {['efectivo', 'tarjeta', 'transferencia'].map((m) => (
+                <button key={m} type="button" tabIndex={-1} className={`pago-chip ${metodoPago === m ? 'active' : ''}`}
+                  onClick={() => setMetodoPago(m)}>
+                  {m === 'efectivo' ? '💵 Efectivo' : m === 'tarjeta' ? '💳 Tarjeta' : '🏦 Transferencia'}
+                </button>
+              ))}
+            </div>
+
+            {metodoPago === 'efectivo' ? (
+              <>
+                <label>Pagó con ($)</label>
+                <input
+                  autoFocus
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={pagoCon}
+                  placeholder={totalRedondeado.toFixed(2)}
+                  onChange={(e) => { if (/^\d*\.?\d{0,2}$/.test(e.target.value)) setPagoCon(e.target.value); }}
+                  style={{ marginBottom: 10 }}
+                />
+                <div className="cobro-quick">
+                  <button type="button" tabIndex={-1} className="btn small secondary" onClick={() => setPagoCon(totalRedondeado.toFixed(2))}>Exacto</button>
+                  {[20, 50, 100, 200, 500, 1000].filter((d) => d >= totalRedondeado).slice(0, 4).map((d) => (
+                    <button key={d} type="button" tabIndex={-1} className="btn small secondary" onClick={() => setPagoCon(String(d))}>${d}</button>
+                  ))}
+                </div>
+                <div className={`cobro-cambio ${cambioVista !== null && cambioVista < 0 ? 'falta' : ''}`}>
+                  <div className="cobro-label">{cambioVista !== null && cambioVista < 0 ? 'Faltan' : 'Su cambio'}</div>
+                  <div className="cobro-cambio-monto">
+                    ${cambioVista === null ? '0.00' : Math.abs(cambioVista).toFixed(2)}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="sub" style={{ textAlign: 'center', margin: '8px 0 18px' }}>
+                Se cobra el total completo con {metodoPago}.
+              </p>
+            )}
+
+            <div className="row">
+              <button className="btn secondary" disabled={cobrando} onClick={() => setCobroOpen(false)}>Cancelar (Esc)</button>
+              <button className="btn" disabled={cobrando} onClick={() => confirmarCobro(false)}>{cobrando ? 'Cobrando…' : 'Cobrar (Enter)'}</button>
+            </div>
+            <button className="btn secondary full" style={{ marginTop: 10 }} disabled={cobrando} onClick={() => confirmarCobro(true)}>
+              Cobrar e imprimir (Ctrl+Enter)
+            </button>
           </div>
         </div>
       )}
@@ -753,6 +964,12 @@ export default function POS({ session }) {
                 <span>TOTAL</span>
                 <span className="mono">${Number(reciboData.venta.total).toFixed(2)}</span>
               </div>
+              {reciboData.metodoPago === 'efectivo' && reciboData.pagoCon !== null && reciboData.pagoCon !== undefined && (
+                <div className="recibo-pagos">
+                  <div className="recibo-pago"><span>Pagó con</span><span className="mono">${Number(reciboData.pagoCon).toFixed(2)}</span></div>
+                  <div className="recibo-pago"><span>Cambio</span><span className="mono">${Number(reciboData.cambio || 0).toFixed(2)}</span></div>
+                </div>
+              )}
               <div className="mono" style={{ textAlign: 'center', marginTop: 10, fontSize: 12 }}>
                 Pago: {reciboData.metodoPago === 'efectivo' ? 'EFECTIVO' : reciboData.metodoPago === 'tarjeta' ? 'TARJETA' : 'TRANSFERENCIA'}
               </div>
@@ -761,8 +978,8 @@ export default function POS({ session }) {
               </div>
             </div>
             <div className="row recibo-botones" style={{ marginTop: 18 }}>
-              <button className="btn secondary" onClick={() => setReciboOpen(false)}>Cerrar</button>
-              <button className="btn" onClick={imprimirRecibo}>Imprimir</button>
+              <button className="btn secondary" onClick={() => setReciboOpen(false)}>Cerrar (Esc)</button>
+              <button className="btn" onClick={imprimirRecibo}>Imprimir (Enter)</button>
             </div>
           </div>
         </div>,

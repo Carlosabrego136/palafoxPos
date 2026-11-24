@@ -122,3 +122,21 @@ impresora de tickets conectada a la compu/tablet) o simplemente cerrar.
   de página personalizados por tienda** — Cristian los edita desde
   **Ticket** en el sistema central. Si una tienda no tiene nada
   configurado, sale el mensaje genérico de siempre.
+
+## Atajos de teclado (punto de venta)
+
+| Tecla | Qué hace |
+|---|---|
+| Escribir | Busca el producto (sin importar mayúsculas ni acentos; varias palabras) |
+| ↑ ↓ | Cambia el producto resaltado |
+| Enter | Abre la cantidad del producto resaltado |
+| Enter (en la cantidad) | Agrega al ticket y regresa al buscador |
+| Esc | Cobrar (cuando no hay ventanas abiertas y el ticket tiene artículos) |
+| Enter (en el cobro) | Cobra y muestra el ticket |
+| Ctrl+Enter (en el cobro) | Cobra e imprime |
+| Esc (en el cobro / ticket) | Cancela / cierra |
+| Enter (en el ticket) | Imprime |
+| F2 | Ir al buscador |
+
+En efectivo, el campo "Pagó con" calcula el cambio en vivo y el ticket lo imprime.
+Si se deja vacío se toma como pago exacto.
